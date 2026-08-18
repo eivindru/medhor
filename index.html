@@ -116,6 +116,47 @@
   #micInfo { font-size: 1rem; line-height: 1.6; color: var(--demp); }
   #micInfo strong { color: var(--tekst); }
   .hjelp { color: var(--demp); font-size: 0.9rem; margin-top: 8px; }
+
+  /* Forhåndssjekk og strategivalg */
+  .sjekkpunkt {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 1px solid #22262f;
+  }
+  .sjekkpunkt input { width: 30px; height: 30px; flex: none; margin-top: 2px; }
+  .sjekkpunkt label { color: var(--tekst); font-size: 1rem; line-height: 1.45; }
+  .sjekkpunkt small { display: block; color: var(--demp); font-size: 0.87rem; }
+
+  .strategi {
+    border-bottom: 1px solid #22262f;
+    padding: 10px 0;
+  }
+  .strategi:last-child { border-bottom: none; }
+  .strategi .navn { font-weight: 700; margin-bottom: 2px; }
+  .strategi small { color: var(--demp); font-size: 0.87rem; line-height: 1.4; display: block; margin-bottom: 6px; }
+
+  #sesjonStatus {
+    background: #14161c;
+    border-left: 4px solid var(--varsel);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin: 10px 0;
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+  #sesjonStatus .god { color: var(--ok); font-weight: 700; }
+  #sesjonStatus .darlig { color: var(--feil); font-weight: 700; }
+  .viktig {
+    background: #2a1f14;
+    border: 2px solid var(--varsel);
+    border-radius: 10px;
+    padding: 12px;
+    margin: 10px 0;
+    font-size: 1.02rem;
+    line-height: 1.5;
+  }
 </style>
 </head>
 <body>
@@ -125,6 +166,43 @@
   <span id="statusTekst">KLAR</span>
   <span class="tid" id="statusTid">00:00</span>
 </div>
+
+<!-- 0. Forhåndssjekk – må være i orden før knappetesting gir mening -->
+<section>
+  <h2>0. Forhåndssjekk før testing</h2>
+  <div class="sjekkpunkt">
+    <input type="checkbox" id="sjekkAA">
+    <label for="sjekkAA">Android Auto er helt frakoblet
+      <small>Med AA aktivt sendes rattknappene til AA-appen, aldri til Chrome. Slå av trådløs AA i Android Auto-innstillingene for denne bilen.</small></label>
+  </div>
+  <div class="sjekkpunkt">
+    <input type="checkbox" id="sjekkApper">
+    <label for="sjekkApper">Andre medieapper er tvangsstoppet
+      <small>Pocket Casts, Spotify, YouTube Music: Innstillinger → Apper → Tving stopp. Sveip også bort mediekortene deres i varselfeltet.</small></label>
+  </div>
+  <div class="sjekkpunkt">
+    <input type="checkbox" id="sjekkKilde">
+    <label for="sjekkKilde">Bilens lydkilde står på «Bluetooth Audio»
+      <small>Mange anlegg sender bare rattkommandoer over Bluetooth når nettopp den kilden er valgt.</small></label>
+  </div>
+  <div class="sjekkpunkt">
+    <input type="checkbox" id="sjekkFesting">
+    <label for="sjekkFesting">Mediegjenopptak er slått av
+      <small>Innstillinger → Lyd og vibrasjon → Media → slå av «Fest mediespiller». Hindrer at døde sesjoner henger igjen.</small></label>
+  </div>
+
+  <div class="viktig">
+    <strong>Avgjørende test:</strong> Når lyden spiller, dra ned varselfeltet på telefonen.
+    Ser du et mediekort fra Chrome med filnavnet? Uten dette kortet har Chrome ingen
+    mediesesjon, og da kan rattknappene <em>aldri</em> nå fram – uansett hva vi koder.
+    <div class="rad" style="margin-top:10px">
+      <button id="varselJa">✓ Jeg ser Chrome-kortet</button>
+      <button id="varselNei">✗ Jeg ser det IKKE</button>
+    </div>
+  </div>
+
+  <div id="sesjonStatus">Laster …</div>
+</section>
 
 <!-- 1. Lydkilde og avspilling -->
 <section>
@@ -153,9 +231,65 @@
   <p class="hjelp">Start avspilling med skjermknappen først (autoplay-regel). Etter noen sekunders avspilling skal Chrome bli aktiv mediaapp og motta rattknapper.</p>
 </section>
 
-<!-- 2. Media Session-logg -->
+<!-- 2. Strategier for å vinne mediesesjonen -->
 <section>
-  <h2>2. Mediekommando-logg</h2>
+  <h2>2. Strategier – slå av og på én om gangen</h2>
+
+  <div class="strategi">
+    <div class="navn">A · Sesjonsanker</div>
+    <small>Et 60 sekunders, praktisk talt lydløst spor som holdes i gang, slik at Chrome
+    beholder mediesesjonen også når hovedlyden er pauset. Android kaster nemlig pausede
+    sesjoner etter noen minutter, og Chrome kan ikke vekkes igjen av et knappetrykk.</small>
+    <select id="ankerModus">
+      <option value="av">Av – ingen anker</option>
+      <option value="vedPause" selected>På når hovedlyden er pauset</option>
+      <option value="alltid">Alltid på</option>
+    </select>
+  </div>
+
+  <div class="strategi">
+    <div class="navn">B · Rapportert tilstand til bilen</div>
+    <small>Noen bilanlegg sender bare knappetrykk når telefonen melder at den faktisk
+    spiller. «Alltid spiller» lyver bevisst til bilen for å teste om det åpner kanalen.</small>
+    <select id="tilstandModus">
+      <option value="ekte" selected>Ekte tilstand (spiller/pauset)</option>
+      <option value="alltidSpiller">Alltid «spiller»</option>
+      <option value="ingen">Ikke rapporter tilstand</option>
+    </select>
+  </div>
+
+  <div class="strategi">
+    <div class="navn">C · Posisjonsstatus</div>
+    <small>Sender lengde og posisjon til bilen, som noen anlegg krever før de regner
+    telefonen som en fullverdig mediespiller.</small>
+    <div class="rad">
+      <input type="checkbox" id="posisjonPa" checked style="width:28px;height:28px">
+      <label for="posisjonPa">Send posisjonsstatus</label>
+    </div>
+  </div>
+
+  <div class="strategi">
+    <div class="navn">D · Metadata</div>
+    <small>Tittel, artist og coverbilde. Uten metadata viser bilen ingenting, og enkelte
+    anlegg ignorerer kilder de ikke kan navngi.</small>
+    <div class="rad">
+      <input type="checkbox" id="metadataPa" checked style="width:28px;height:28px">
+      <label for="metadataPa">Send metadata</label>
+    </div>
+  </div>
+
+  <div class="strategi">
+    <div class="navn">E · Gjenerobre sesjonen</div>
+    <small>Android gir knappene til den appen som <em>sist</em> spilte lyd og har en
+    sesjon. Denne stopper og starter avspillingen på nytt, slik at Chrome blir den
+    sist spilte appen. Trykk denne hvis en annen app har kapret knappene.</small>
+    <button id="knappGjenerobre" class="primaer">⟳ Gjenerobre mediesesjonen</button>
+  </div>
+</section>
+
+<!-- 3. Media Session-logg -->
+<section>
+  <h2>3. Mediekommando-logg</h2>
   <div class="rad" style="margin-bottom:10px">
     <input type="checkbox" id="pipPa" checked style="width:28px;height:28px">
     <label for="pipPa">Pip ved hver mediekommando</label>
@@ -168,9 +302,9 @@
   </div>
 </section>
 
-<!-- 3. Dikteringstest -->
+<!-- 4. Dikteringstest -->
 <section>
-  <h2>3. Diktering (nb-NO)</h2>
+  <h2>4. Diktering (nb-NO)</h2>
   <button id="knappDikter" class="primaer">🎙 Start diktering</button>
   <div class="rad" style="margin:8px 0">
     <input type="checkbox" id="vaktPa" checked style="width:28px;height:28px">
@@ -182,9 +316,9 @@
   <p class="hjelp">Kjør gjerne testen både med avspilling i gang og pauset, for å se hvordan Bluetooth-mikrofonen og bilstøyen påvirker resultatet.</p>
 </section>
 
-<!-- 4. Mikrofon-info -->
+<!-- 5. Mikrofon-info -->
 <section>
-  <h2>4. Mikrofon</h2>
+  <h2>5. Mikrofon</h2>
   <button id="knappMic">Sjekk mikrofon</button>
   <div id="micInfo">Ikke sjekket ennå.</div>
 </section>
@@ -194,7 +328,7 @@
 
 // Bump denne ved hver endring, så det er lett å se på skjermen om telefonen
 // har lastet siste versjon (Chrome cacher iblant aggressivt i bil).
-const VERSJON = 'v7';
+const VERSJON = 'v8';
 document.getElementById('versjon').textContent = VERSJON;
 
 /* ---------- Hjelpere ---------- */
@@ -329,6 +463,54 @@ function pipSkjerm() {
   } catch (e) { /* lyd er kun hjelpemiddel – aldri kritisk */ }
 }
 
+/* ---------- Sesjonsanker (strategi A) ---------- */
+
+// Bygger et WAV-spor på 60 sekunder som i praksis er lydløst, men ikke digital
+// stillhet: noen plattformer ser bort fra spor som bare inneholder nuller.
+// Amplituden er 1 av 32768, altså langt under hørbarhet.
+function lagStilleWav(sekunder) {
+  const rate = 8000;
+  const antall = rate * sekunder;
+  const buf = new ArrayBuffer(44 + antall * 2);
+  const dv = new DataView(buf);
+  const tekst = (pos, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(pos + i, s.charCodeAt(i)); };
+  tekst(0, 'RIFF');
+  dv.setUint32(4, 36 + antall * 2, true);
+  tekst(8, 'WAVE');
+  tekst(12, 'fmt ');
+  dv.setUint32(16, 16, true);
+  dv.setUint16(20, 1, true);            // PCM
+  dv.setUint16(22, 1, true);            // mono
+  dv.setUint32(24, rate, true);
+  dv.setUint32(28, rate * 2, true);     // byte per sekund
+  dv.setUint16(32, 2, true);
+  dv.setUint16(34, 16, true);
+  tekst(36, 'data');
+  dv.setUint32(40, antall * 2, true);
+  for (let i = 0; i < antall; i++) dv.setInt16(44 + i * 2, (i % 2) ? 1 : -1, true);
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+
+const anker = new Audio();
+anker.loop = true;
+anker.preload = 'auto';
+anker.src = lagStilleWav(60);
+
+anker.addEventListener('play', () => logg('Sesjonsanker: spiller', 'info'));
+anker.addEventListener('pause', () => logg('Sesjonsanker: stoppet', 'info'));
+
+// Avgjør om ankeret skal gå, ut fra valgt strategi og hovedlydens tilstand
+function oppdaterAnker() {
+  const modus = $('ankerModus').value;
+  const skalSpille = modus === 'alltid' ||
+    (modus === 'vedPause' && spiller.src && spiller.paused);
+  if (skalSpille && anker.paused) {
+    anker.play().catch(err => logg('Sesjonsanker kunne ikke starte: ' + err.message, 'feil'));
+  } else if (!skalSpille && !anker.paused) {
+    anker.pause();
+  }
+}
+
 /* ---------- Lydkilde ---------- */
 
 let gjeldendeTittel = 'Ingen fil valgt';
@@ -408,13 +590,17 @@ spiller.addEventListener('play', () => {
   }
   logg('Avspilling startet' + utloserTekst(), 'ok');
   settStatus('SPILLER');
-  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+  oppdaterTilstand();
+  oppdaterAnker();
+  visSesjonStatus();
   beOmWakeLock();
 });
 spiller.addEventListener('pause', () => {
   logg('Avspilling pauset' + utloserTekst(), 'ok');
   settStatus('PAUSE');
-  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+  oppdaterTilstand();
+  oppdaterAnker();
+  visSesjonStatus();
 });
 spiller.addEventListener('ended', () => logg('Lydfilen er ferdig', 'info'));
 spiller.addEventListener('error', () => {
@@ -446,6 +632,10 @@ const coverUrl = lagCover();
 
 function settMetadata() {
   if (!('mediaSession' in navigator)) return;
+  if (!$('metadataPa').checked) {          // strategi D avslått
+    navigator.mediaSession.metadata = null;
+    return;
+  }
   navigator.mediaSession.metadata = new MediaMetadata({
     title: gjeldendeTittel,
     artist: 'Medhør',
@@ -454,9 +644,19 @@ function settMetadata() {
   });
 }
 
+// Strategi B: hva vi forteller bilen om avspillingstilstanden
+function oppdaterTilstand() {
+  if (!('mediaSession' in navigator)) return;
+  const modus = $('tilstandModus').value;
+  if (modus === 'ingen') navigator.mediaSession.playbackState = 'none';
+  else if (modus === 'alltidSpiller') navigator.mediaSession.playbackState = 'playing';
+  else navigator.mediaSession.playbackState = spiller.paused ? 'paused' : 'playing';
+}
+
 // Holder Chrome/bilen oppdatert om posisjon (viser ev. fremdrift på bilskjermen)
 function oppdaterPosisjon() {
   if (!('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) return;
+  if (!$('posisjonPa').checked) return;    // strategi C avslått
   if (!isFinite(spiller.duration)) return;
   try {
     navigator.mediaSession.setPositionState({
@@ -528,6 +728,134 @@ function registrerMediaSession() {
   }
   settMetadata();
 }
+
+/* ---------- Sesjonsdiagnostikk og strategistyring ---------- */
+
+// Oppsummerer om forutsetningene for at Chrome skal få en mediesesjon er på
+// plass. Selve sesjonen kan ikke leses av fra JavaScript – derfor er
+// mediekortet i varselfeltet den endelige fasiten.
+function visSesjonStatus() {
+  const el = $('sesjonStatus');
+  const varighet = spiller.duration;
+  const linjer = [];
+
+  const harKilde = !!spiller.src;
+  linjer.push(harKilde
+    ? '<span class="god">✓</span> Lydfil lastet'
+    : '<span class="darlig">✗</span> Ingen lydfil lastet');
+
+  if (harKilde && isFinite(varighet)) {
+    linjer.push(varighet >= 5
+      ? '<span class="god">✓</span> Lengde ' + formatTid(varighet) + ' (kravet er minst 5 sekunder)'
+      : '<span class="darlig">✗</span> Bare ' + Math.round(varighet) + ' s – for kort, Chrome lager ingen mediesesjon');
+  } else if (harKilde) {
+    linjer.push('<span class="darlig">?</span> Ukjent lengde – kan hindre mediesesjon');
+  }
+
+  const noeSpiller = !spiller.paused || !anker.paused;
+  linjer.push(noeSpiller
+    ? '<span class="god">✓</span> Lyd spiller nå' + (spiller.paused ? ' (kun sesjonsanker)' : '')
+    : '<span class="darlig">✗</span> Ingenting spiller – sesjonen kan falle bort');
+
+  linjer.push('Strategier: anker=' + $('ankerModus').value +
+    ', tilstand=' + $('tilstandModus').value +
+    ', posisjon=' + ($('posisjonPa').checked ? 'på' : 'av') +
+    ', metadata=' + ($('metadataPa').checked ? 'på' : 'av'));
+
+  el.innerHTML = linjer.join('<br>');
+}
+
+// Logger valgt strategikombinasjon, slik at den kopierte loggen alltid viser
+// hvilket oppsett som gjaldt da knappene ble testet.
+function loggStrategier(hva) {
+  logg('STRATEGI endret (' + hva + ') → anker=' + $('ankerModus').value +
+    ', tilstand=' + $('tilstandModus').value +
+    ', posisjon=' + ($('posisjonPa').checked ? 'på' : 'av') +
+    ', metadata=' + ($('metadataPa').checked ? 'på' : 'av'), 'media');
+}
+
+$('ankerModus').addEventListener('change', () => {
+  loggStrategier('anker');
+  oppdaterAnker();
+  visSesjonStatus();
+});
+$('tilstandModus').addEventListener('change', () => {
+  loggStrategier('tilstand');
+  oppdaterTilstand();
+  visSesjonStatus();
+});
+$('posisjonPa').addEventListener('change', () => {
+  loggStrategier('posisjon');
+  oppdaterPosisjon();
+  visSesjonStatus();
+});
+$('metadataPa').addEventListener('change', () => {
+  loggStrategier('metadata');
+  settMetadata();
+  visSesjonStatus();
+});
+
+// Strategi E: gjør Chrome til den appen som sist spilte lyd, og bygg
+// mediesesjonen opp på nytt fra bunnen.
+$('knappGjenerobre').onclick = async () => {
+  logg('=== GJENEROBRER MEDIESESJONEN ===', 'media');
+  const posisjon = spiller.currentTime;
+  const spilteFor = !spiller.paused;
+  try {
+    spiller.pause();
+    anker.pause();
+    await new Promise(r => setTimeout(r, 400));
+    registrerMediaSession();          // registrer alle handlere på nytt
+    settMetadata();
+    if (spiller.src) {
+      sisteUtloser = { kilde: 'gjenerobring', tid: Date.now() };
+      await spiller.play();
+      spiller.currentTime = posisjon;
+      logg('Chrome spiller igjen – la den gå i minst 5 sekunder', 'ok');
+      if (!spilteFor) {
+        // Var den pauset før, la den spille litt og pause så igjen, slik at
+        // Chrome rekker å bli «sist spilte app» før vi går tilbake til pause.
+        setTimeout(() => {
+          sisteUtloser = { kilde: 'gjenerobring', tid: Date.now() };
+          spiller.pause();
+          logg('Tilbake til pause – sesjonen skal nå tilhøre Chrome', 'ok');
+        }, 6000);
+      }
+    } else {
+      anker.play().catch(() => {});
+      logg('Ingen lydfil – startet kun sesjonsankeret', 'info');
+    }
+  } catch (e) {
+    logg('Gjenerobring feilet: ' + e.message, 'feil');
+  }
+  oppdaterTilstand();
+  visSesjonStatus();
+};
+
+// Svar på den avgjørende observasjonen: ser brukeren Chromes mediekort?
+$('varselJa').onclick = () => {
+  logg('BRUKER BEKREFTER: Chrome-mediekortet ER synlig i varselfeltet', 'ok');
+  logg('→ Chrome har en mediesesjon. Trykk play/pause PÅ KORTET for å bekrefte at handlerne svarer.', 'info');
+};
+$('varselNei').onclick = () => {
+  logg('BRUKER BEKREFTER: Chrome-mediekortet er IKKE synlig', 'feil');
+  logg('→ Chrome har ingen mediesesjon. Rattknappene kan umulig nå fram. Sjekk lengde ≥ 5 s, at lyd faktisk spiller, og slå på sesjonsankeret.', 'feil');
+};
+
+// Varsler tydelig hvis den valgte filen er for kort til å gi mediesesjon
+spiller.addEventListener('loadedmetadata', () => {
+  if (isFinite(spiller.duration) && spiller.duration < 5) {
+    logg('ADVARSEL: lydfilen er bare ' + Math.round(spiller.duration) +
+      ' s. Chrome lager ikke mediesesjon for filer under 5 sekunder.', 'feil');
+  }
+  visSesjonStatus();
+});
+
+// Fanger opp tastetrykk – noen oppsett sender knapper som tastaturhendelser
+// i stedet for mediekommandoer, og da vil vi vite om det.
+window.addEventListener('keydown', e => {
+  logg('TASTETRYKK: key=' + e.key + ' code=' + e.code + ' keyCode=' + e.keyCode, 'media');
+});
 
 /* ---------- Diktering (Web Speech API) ---------- */
 
@@ -781,13 +1109,18 @@ document.addEventListener('visibilitychange', () => {
 
 /* ---------- Oppstart ---------- */
 
-logg('Testside lastet. Velg lydfil og trykk Spill.', 'info');
+logg('Testside ' + VERSJON + ' lastet. Gå gjennom forhåndssjekken før du tester knappene.', 'info');
 // Chrome nekter som regel mikrofontilgang (og dermed diktering) for sider
 // åpnet direkte fra fil – selv om Chrome ellers har mikrofontillatelse.
 if (location.protocol === 'file:') {
   logg('ADVARSEL: Siden er åpnet via file:// – Chrome blokkerer da ofte mikrofon og diktering. Kjør en lokal server, f.eks. «python -m http.server 8000», og åpne http://localhost:8000/fase1-test.html', 'feil');
 }
 registrerMediaSession();
+oppdaterTilstand();
+loggStrategier('oppstart');
+visSesjonStatus();
+// Sesjonsstatusen endrer seg med avspillingen, så den holdes oppdatert jevnlig
+setInterval(visSesjonStatus, 2000);
 </script>
 </body>
 </html>
