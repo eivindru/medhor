@@ -166,6 +166,10 @@
 <section>
   <h2>3. Diktering (nb-NO)</h2>
   <button id="knappDikter" class="primaer">🎙 Start diktering</button>
+  <div class="rad" style="margin:8px 0">
+    <input type="checkbox" id="vaktPa" checked style="width:28px;height:28px">
+    <label for="vaktPa">Hold lyden pauset mens jeg dikterer (som i fase 2)</label>
+  </div>
   <div id="dikterStatus">Ikke aktiv</div>
   <div id="tolketTekst"><span class="interim">Tolket tekst vises her …</span></div>
   <div id="dikterFeil"></div>
@@ -291,8 +295,19 @@ $('knappPause').onclick = () => spiller.pause();
 $('knappFram').onclick = () => spol(spolLengde());
 $('knappTilbake').onclick = () => spol(-spolLengde());
 
+// Når mikrofonen åpnes, tar Android lydfokus fra Chrome, og Chrome pauser
+// lyden av seg selv – men gjenopptar den også av seg selv når fokus slippes,
+// midt i dikteringen. Denne vakten holder lyden pauset mens vi lytter, slik
+// fase 2 krever. Kan slås av for å se den rå oppførselen.
+let holdPause = false;
+
 // Logg det lydelementet faktisk gjør – uavhengig av hvor kommandoen kom fra
 spiller.addEventListener('play', () => {
+  if (holdPause && $('vaktPa').checked) {
+    spiller.pause();
+    logg('Blokkerte automatisk gjenopptak (lydfokus tilbake)', 'media');
+    return;
+  }
   logg('Avspilling startet', 'ok');
   settStatus('SPILLER');
   if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
@@ -415,22 +430,36 @@ function registrerMediaSession() {
 let gjenkjenning = null;
 let dikteringAktiv = false;   // ønsket tilstand – styrer automatisk omstart
 let omstarter = 0;
+let omstartTimer = null;      // ventende automatisk omstart
 let ferdigTekst = '';         // tekst fra tidligere gjenkjenningsøkter
 let sesjonTekst = '';         // endelig tekst i pågående økt
 
 // Til sammenlikning av resultater: små bokstaver, enkel mellomrom
 const norm = s => s.trim().toLowerCase().replace(/\s+/g, ' ');
 
-// Chrome på Android sender ofte HELE ytringen på nytt som «endelig» resultat
-// for hver oppdatering (kumulativt), mens desktop sender adskilte segmenter.
-// Er ny og gammel tekst prefiks av hverandre, beholder vi bare den lengste;
-// ellers er det et ekte nytt segment som legges til.
+// Settes når vi har sett at plattformen sender kumulative resultater
+let kumulativModus = false;
+
+// Chrome på Android sender HELE ytringen på nytt som «endelig» resultat for
+// hver oppdatering (kumulativt), mens desktop sender adskilte segmenter.
+// Google reviderer dessuten tidligere ord underveis, så et nytt kumulativt
+// resultat er ikke alltid et rent prefiks-tillegg («OK en liten test» kan bli
+// «Jeg er en liten test»). Vi oppdager kumulativ oppførsel via prefiks-
+// tilfellene, og bruker deretter «lengste vinner» for hele økten.
 function leggTilFinal(t) {
-  const a = norm(sesjonTekst), b = norm(t);
-  if (a && (b.startsWith(a) || a.startsWith(b))) {
-    if (b.length > a.length) sesjonTekst = t.trim();
+  const ny = t.trim();
+  if (!ny) return;
+  if (!sesjonTekst) { sesjonTekst = ny; return; }
+
+  const a = norm(sesjonTekst), b = norm(ny);
+  if (b.startsWith(a) || a.startsWith(b)) {
+    kumulativModus = true;                      // bekreftet kumulativ plattform
+    if (b.length > a.length) sesjonTekst = ny;
+  } else if (kumulativModus) {
+    // Revidert utgave av samme ytring – behold den mest fullstendige
+    if (b.length > a.length) sesjonTekst = ny;
   } else {
-    sesjonTekst = (sesjonTekst + ' ' + t.trim()).trim();
+    sesjonTekst = sesjonTekst + ' ' + ny;       // ekte nytt segment (desktop)
   }
 }
 
@@ -482,6 +511,8 @@ function startGjenkjenning() {
   gjenkjenning.interimResults = true;
 
   gjenkjenning.onstart = () => {
+    // Brukeren kan ha rukket å trykke stopp mens økten startet opp
+    if (!dikteringAktiv) { try { gjenkjenning.stop(); } catch (e) {} return; }
     $('dikterStatus').textContent = '🔴 LYTTER' + (omstarter ? ' (omstart nr. ' + omstarter + ')' : '');
     logg('Diktering startet' + (omstarter ? ' (omstart nr. ' + omstarter + ')' : ''), 'ok');
   };
@@ -510,7 +541,7 @@ function startGjenkjenning() {
     logg('Gjenkjenning stoppet av nettleseren', 'info');
     if (dikteringAktiv) {
       omstarter++;
-      setTimeout(() => { if (dikteringAktiv) startGjenkjenning(); }, 250);
+      omstartTimer = setTimeout(() => { if (dikteringAktiv) startGjenkjenning(); }, 250);
     } else {
       $('dikterStatus').textContent = 'Ikke aktiv';
     }
@@ -527,6 +558,7 @@ function startGjenkjenning() {
 $('knappDikter').onclick = () => {
   if (!dikteringAktiv) {
     dikteringAktiv = true;
+    holdPause = true;
     omstarter = 0;
     ferdigTekst = '';
     sesjonTekst = '';
@@ -537,7 +569,9 @@ $('knappDikter').onclick = () => {
     startGjenkjenning();
   } else {
     dikteringAktiv = false;
-    if (gjenkjenning) gjenkjenning.stop();
+    holdPause = false;
+    clearTimeout(omstartTimer);   // stopp ventende omstart
+    if (gjenkjenning) { try { gjenkjenning.stop(); } catch (e) {} }
     $('knappDikter').textContent = '🎙 Start diktering';
     $('knappDikter').classList.remove('aktiv');
     logg('Diktering stoppet av bruker', 'info');
