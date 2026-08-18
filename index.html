@@ -709,6 +709,10 @@ async function beOmWakeLock() {
 
 // Spiller alle kjenningstonene etter tur, så de kan læres før kjøring
 $('knappToner').onclick = async () => {
+  if (!$('pipPa').checked) {
+    logg('Kan ikke spille tonene – huk av «Pip ved hver mediekommando» først', 'feil');
+    return;
+  }
   vekkLyd();
   for (const navn of Object.keys(PIP)) {
     logg('Kjenningstone: ' + navn, 'info');
