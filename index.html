@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#111318">
-<title>Medhør – fase 1-test</title>
+<title>Medhør</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text y='52' font-size='52'>🎧</text></svg>">
 <style>
-  /* Mørkt tema, høy kontrast, store flater – for bruk i bil */
   :root {
     --bg: #111318;
     --panel: #1c1f26;
@@ -16,40 +16,42 @@
     --ok: #3ddc84;
     --varsel: #ffd54d;
     --feil: #ff5c5c;
+    --lytter: #c62828;
+    --lagret: #1565c0;
+    --spiller: #1b5e20;
   }
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
     margin: 0;
     background: var(--bg);
     color: var(--tekst);
     font-family: system-ui, sans-serif;
     font-size: 18px;
-    padding: 12px 12px 48px;
+    -webkit-tap-highlight-color: transparent;
   }
-  h1 { font-size: 1.3rem; margin: 8px 0 4px; }
-  #versjon { color: var(--demp); font-size: 0.85rem; font-weight: 400; }
-  h2 { font-size: 1.1rem; margin: 0 0 10px; color: var(--aksent); }
-  section {
-    background: var(--panel);
-    border-radius: 12px;
-    padding: 14px;
-    margin: 14px 0;
-  }
+  h1 { font-size: 1.25rem; margin: 0; }
+  h2 { font-size: 1.05rem; margin: 0 0 10px; color: var(--aksent); }
+  .versjon { color: var(--demp); font-size: 0.8rem; font-weight: 400; }
+
   button {
     background: #2a2f3a;
     color: var(--tekst);
     border: 1px solid #3a4150;
     border-radius: 10px;
-    min-height: 64px;
-    font-size: 1.15rem;
-    padding: 8px 18px;
-    margin: 4px 4px 4px 0;
+    min-height: 56px;
+    font-size: 1.05rem;
+    padding: 8px 16px;
     touch-action: manipulation;
+    font-family: inherit;
   }
   button:active { background: #3a4150; }
+  button:disabled { opacity: 0.4; }
   button.primaer { background: #1c4d80; border-color: var(--aksent); }
-  button.aktiv { background: #14532d; border-color: var(--ok); }
-  input[type="url"], select {
+  button.fare { background: #5c1f1f; border-color: var(--feil); }
+  button.liten { min-height: 44px; font-size: 0.92rem; padding: 6px 12px; }
+
+  input[type="url"], input[type="text"], input[type="number"], select, textarea {
     background: #14161c;
     color: var(--tekst);
     border: 1px solid #3a4150;
@@ -57,417 +59,666 @@
     font-size: 1rem;
     padding: 12px;
     width: 100%;
-    margin: 4px 0;
+    font-family: inherit;
   }
-  input[type="file"] { color: var(--demp); margin: 4px 0; width: 100%; }
-  audio { width: 100%; margin-top: 8px; }
+  input[type="file"] { color: var(--demp); width: 100%; }
+  input[type="checkbox"] { width: 28px; height: 28px; flex: none; }
   label { color: var(--demp); font-size: 0.95rem; }
   .rad { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .felt { margin: 12px 0; }
+  .felt label { display: block; margin-bottom: 5px; }
+  .hjelp { color: var(--demp); font-size: 0.88rem; line-height: 1.45; margin: 6px 0 0; }
 
-  /* Stor statuslinje øverst */
-  #status {
-    position: sticky;
-    top: 0;
-    z-index: 5;
+  /* Visninger */
+  .visning { display: none; padding: 12px 12px 40px; }
+  .visning.aktiv { display: block; }
+  section {
     background: var(--panel);
-    border: 2px solid #3a4150;
     border-radius: 12px;
-    padding: 10px 14px;
+    padding: 14px;
+    margin: 12px 0;
+  }
+  header.topp {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 1.4rem;
-    font-weight: 700;
+    padding: 10px 12px;
+    background: var(--panel);
+    position: sticky;
+    top: 0;
+    z-index: 10;
   }
-  #status .tid { font-variant-numeric: tabular-nums; color: var(--aksent); }
 
-  /* Loggen – stor og lesbar */
+  /* Kjøremodus – hele skjermen er trykkflate */
+  #kjoremodus {
+    padding: 0;
+    position: fixed;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+  }
+  #kjoremodus.aktiv { display: flex; }
+  #trykkflate {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 16px;
+    transition: background-color 0.15s;
+    background: #16181e;
+    user-select: none;
+  }
+  #trykkflate.spiller { background: var(--spiller); }
+  #trykkflate.lytter  { background: var(--lytter); }
+  #trykkflate.lagret  { background: var(--lagret); }
+  #stortStatus {
+    font-size: clamp(2.6rem, 15vw, 5.5rem);
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    line-height: 1;
+  }
+  #stortTid {
+    font-size: clamp(2rem, 11vw, 4rem);
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    margin-top: 12px;
+  }
+  #stortHint { font-size: 1.05rem; margin-top: 16px; opacity: 0.85; line-height: 1.4; }
+  #liveTekst {
+    font-size: 1.15rem;
+    margin-top: 14px;
+    min-height: 2.6em;
+    max-height: 30vh;
+    overflow-y: auto;
+    line-height: 1.4;
+    opacity: 0.95;
+  }
+  #kjoreBunn {
+    display: flex;
+    gap: 8px;
+    padding: 8px;
+    background: #0c0e12;
+  }
+  #kjoreBunn button { flex: 1; min-height: 62px; font-size: 1.1rem; }
+
+  /* Kommentarliste */
+  .kommentar {
+    background: #14161c;
+    border-radius: 10px;
+    padding: 11px;
+    margin-bottom: 9px;
+  }
+  .kommentar .topplinje { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .kommentar .tidskode {
+    background: #1c4d80;
+    border-color: var(--aksent);
+    min-height: 40px;
+    padding: 5px 12px;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.98rem;
+  }
+  .kommentar .merke { color: var(--varsel); font-size: 0.85rem; }
+  .kommentar .tekst { line-height: 1.45; margin-bottom: 8px; white-space: pre-wrap; }
+  .kommentar .verktoy { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .prosjekt {
+    background: #14161c;
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+  .prosjekt.aktiv { border: 2px solid var(--aksent); }
+  .prosjekt .info { flex: 1; min-width: 0; }
+  .prosjekt .navn { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prosjekt .under { color: var(--demp); font-size: 0.85rem; margin-top: 2px; }
+
+  /* Logg */
   #logg {
     font-family: ui-monospace, Consolas, monospace;
-    font-size: 1.02rem;
-    line-height: 1.55;
-    max-height: 45vh;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    max-height: 40vh;
     overflow-y: auto;
     background: #14161c;
     border-radius: 8px;
-    padding: 10px;
+    padding: 8px;
   }
-  #logg .rad-logg { border-bottom: 1px solid #22262f; padding: 3px 0; }
-  #logg .klokke { color: var(--demp); margin-right: 8px; }
-  #logg .medietid { color: var(--aksent); margin-right: 8px; }
+  #logg div { border-bottom: 1px solid #22262f; padding: 2px 0; }
+  #logg .klokke { color: var(--demp); margin-right: 6px; }
   #logg .media { color: var(--varsel); font-weight: 700; }
   #logg .ok { color: var(--ok); }
   #logg .feil { color: var(--feil); font-weight: 700; }
   #logg .info { color: var(--tekst); }
 
-  /* Dikteringsvisning */
-  #tolketTekst {
+  #csvForhaand {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.85rem;
     background: #14161c;
     border-radius: 8px;
-    padding: 12px;
-    min-height: 90px;
-    font-size: 1.25rem;
-    line-height: 1.5;
+    padding: 10px;
+    max-height: 200px;
+    overflow: auto;
+    white-space: pre;
   }
-  #tolketTekst .interim { color: var(--demp); font-style: italic; }
-  #dikterStatus { font-weight: 700; font-size: 1.2rem; margin: 8px 0; }
-  #dikterFeil { color: var(--feil); font-weight: 700; min-height: 1.4em; margin-top: 6px; }
-
-  #micInfo { font-size: 1rem; line-height: 1.6; color: var(--demp); }
-  #micInfo strong { color: var(--tekst); }
-  .hjelp { color: var(--demp); font-size: 0.9rem; margin-top: 8px; }
-
-  /* Forhåndssjekk og strategivalg */
-  .sjekkpunkt {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 9px 0;
-    border-bottom: 1px solid #22262f;
-  }
-  .sjekkpunkt input { width: 30px; height: 30px; flex: none; margin-top: 2px; }
-  .sjekkpunkt label { color: var(--tekst); font-size: 1rem; line-height: 1.45; }
-  .sjekkpunkt small { display: block; color: var(--demp); font-size: 0.87rem; }
-
-  .strategi {
-    border-bottom: 1px solid #22262f;
-    padding: 10px 0;
-  }
-  .strategi:last-child { border-bottom: none; }
-  .strategi .navn { font-weight: 700; margin-bottom: 2px; }
-  .strategi small { color: var(--demp); font-size: 0.87rem; line-height: 1.4; display: block; margin-bottom: 6px; }
-
-  #sesjonStatus {
-    background: #14161c;
-    border-left: 4px solid var(--varsel);
-    border-radius: 6px;
-    padding: 10px 12px;
-    margin: 10px 0;
-    font-size: 1rem;
-    line-height: 1.6;
-  }
-  #sesjonStatus .god { color: var(--ok); font-weight: 700; }
-  #sesjonStatus .darlig { color: var(--feil); font-weight: 700; }
-  .viktig {
-    background: #2a1f14;
-    border: 2px solid var(--varsel);
-    border-radius: 10px;
-    padding: 12px;
-    margin: 10px 0;
-    font-size: 1.02rem;
-    line-height: 1.5;
-  }
+  .tom { color: var(--demp); text-align: center; padding: 24px 12px; line-height: 1.5; }
 </style>
 </head>
 <body>
 
-<h1>Medhør – fase 1: testside <span id="versjon"></span></h1>
-<div id="status">
-  <span id="statusTekst">KLAR</span>
-  <span class="tid" id="statusTid">00:00</span>
+<!-- ══════════ FORBEREDELSE ══════════ -->
+<div class="visning aktiv" id="forberedelse">
+  <header class="topp">
+    <h1>Medhør <span class="versjon" id="versjon"></span></h1>
+    <button class="liten" id="tilInnstillinger">⚙ Innstillinger</button>
+  </header>
+
+  <section>
+    <h2>Aktivt prosjekt</h2>
+    <div id="aktivtProsjekt" class="tom">Ingen prosjekter ennå.</div>
+    <div class="felt">
+      <label for="filVelger">Lydfil (velges på nytt hver gang appen åpnes)</label>
+      <input type="file" id="filVelger" accept="audio/*">
+    </div>
+    <div class="felt">
+      <label for="tittelFelt">Tittel (brukes i CSV-eksporten)</label>
+      <input type="text" id="tittelFelt" placeholder="F.eks. Kiosk #5 Solli plass">
+    </div>
+    <button id="knappStart" class="primaer" style="width:100%" disabled>▶ Start kjøremodus</button>
+    <p class="hjelp">Velg lydfil før du kjører. Kommentarene lagres fortløpende og
+      overlever at fanen lukkes – men selve lydfilen må velges på nytt, siden
+      nettleseren ikke får lov til å huske den.</p>
+  </section>
+
+  <section>
+    <h2>Prosjekter</h2>
+    <div id="prosjektListe"></div>
+  </section>
+
+  <section>
+    <button id="tilEtterarbeid" style="width:100%">📝 Se og eksporter kommentarer</button>
+  </section>
 </div>
 
-<!-- 0. Forhåndssjekk – må være i orden før knappetesting gir mening -->
-<section>
-  <h2>0. Forhåndssjekk før testing</h2>
-  <div class="sjekkpunkt">
-    <input type="checkbox" id="sjekkAA">
-    <label for="sjekkAA">Android Auto er helt frakoblet
-      <small>Med AA aktivt sendes rattknappene til AA-appen, aldri til Chrome. Slå av trådløs AA i Android Auto-innstillingene for denne bilen.</small></label>
+<!-- ══════════ KJØREMODUS ══════════ -->
+<div class="visning" id="kjoremodus">
+  <div id="trykkflate">
+    <div id="stortStatus">KLAR</div>
+    <div id="stortTid">00:00</div>
+    <div id="stortHint">Trykk hvor som helst for å starte</div>
+    <div id="liveTekst"></div>
   </div>
-  <div class="sjekkpunkt">
-    <input type="checkbox" id="sjekkApper">
-    <label for="sjekkApper">Andre medieapper er tvangsstoppet
-      <small>Pocket Casts, Spotify, YouTube Music: Innstillinger → Apper → Tving stopp. Sveip også bort mediekortene deres i varselfeltet.</small></label>
+  <div id="kjoreBunn">
+    <button id="knappSpolTilbake">⏪ <span class="spolTall">5</span></button>
+    <button id="knappAvslutt">■ Avslutt</button>
+    <button id="knappSpolFram">⏩ <span class="spolTall">5</span></button>
   </div>
-  <div class="sjekkpunkt">
-    <input type="checkbox" id="sjekkKilde">
-    <label for="sjekkKilde">Bilens lydkilde står på «Bluetooth Audio»
-      <small>Mange anlegg sender bare rattkommandoer over Bluetooth når nettopp den kilden er valgt.</small></label>
-  </div>
-  <div class="sjekkpunkt">
-    <input type="checkbox" id="sjekkFesting">
-    <label for="sjekkFesting">Mediegjenopptak er slått av
-      <small>Innstillinger → Lyd og vibrasjon → Media → slå av «Fest mediespiller». Hindrer at døde sesjoner henger igjen.</small></label>
-  </div>
+</div>
 
-  <div class="viktig">
-    <strong>Avgjørende test:</strong> Når lyden spiller, dra ned varselfeltet på telefonen.
-    Ser du et mediekort fra Chrome med filnavnet? Uten dette kortet har Chrome ingen
-    mediesesjon, og da kan rattknappene <em>aldri</em> nå fram – uansett hva vi koder.
+<!-- ══════════ ETTERARBEID ══════════ -->
+<div class="visning" id="etterarbeid">
+  <header class="topp">
+    <h1>Kommentarer</h1>
+    <button class="liten" id="fraEtterarbeid">← Tilbake</button>
+  </header>
+
+  <section>
+    <div class="rad">
+      <audio id="etterSpiller" controls style="width:100%"></audio>
+    </div>
+    <p class="hjelp">Har du valgt lydfil, hopper trykk på en tidskode rett dit.</p>
+  </section>
+
+  <section>
+    <h2>Liste</h2>
+    <div id="kommentarListe"></div>
+  </section>
+
+  <section>
+    <h2>Eksport til CSV</h2>
+    <div class="felt">
+      <label for="csvFormat">Tidskodeformat</label>
+      <select id="csvFormat">
+        <option value="HHMMSSFF">HH:MM:SS:FF (rammer – Frame.io)</option>
+        <option value="HHMMSSmmm">HH:MM:SS.mmm (millisekunder)</option>
+        <option value="MMSS">MM:SS (enkel)</option>
+      </select>
+    </div>
+    <div id="csvForhaand">Ingen kommentarer å vise.</div>
     <div class="rad" style="margin-top:10px">
-      <button id="varselJa">✓ Jeg ser Chrome-kortet</button>
-      <button id="varselNei">✗ Jeg ser det IKKE</button>
+      <button id="knappDelCsv" class="primaer" style="flex:1">📤 Del CSV</button>
+      <button id="knappLastCsv" style="flex:1">⬇ Last ned CSV</button>
     </div>
-  </div>
+  </section>
+</div>
 
-  <div id="sesjonStatus">Laster …</div>
-</section>
+<!-- ══════════ INNSTILLINGER ══════════ -->
+<div class="visning" id="innstillinger">
+  <header class="topp">
+    <h1>Innstillinger</h1>
+    <button class="liten" id="fraInnstillinger">← Tilbake</button>
+  </header>
 
-<!-- 1. Lydkilde og avspilling -->
-<section>
-  <h2>1. Lydkilde</h2>
-  <input type="file" id="filVelger" accept="audio/*">
-  <div class="rad">
-    <input type="url" id="urlFelt" placeholder="…eller lim inn URL til lydfil" inputmode="url">
-    <button id="lastUrl">Last URL</button>
-  </div>
-  <audio id="spiller" controls preload="metadata"></audio>
-  <div class="rad" style="margin-top:8px">
-    <button id="knappPlay" class="primaer">▶ Spill</button>
-    <button id="knappPause">⏸ Pause</button>
-    <button id="knappTilbake">⏪ −<span class="spolTall">5</span> s</button>
-    <button id="knappFram">⏩ +<span class="spolTall">5</span> s</button>
-  </div>
-  <div class="rad" style="margin-top:8px">
-    <label for="spolLengde">Spolelengde:</label>
-    <select id="spolLengde" style="width:auto">
-      <option value="3">3 s</option>
-      <option value="5" selected>5 s</option>
-      <option value="10">10 s</option>
-      <option value="15">15 s</option>
-    </select>
-  </div>
-  <p class="hjelp">Start avspilling med skjermknappen først (autoplay-regel). Etter noen sekunders avspilling skal Chrome bli aktiv mediaapp og motta rattknapper.</p>
-</section>
-
-<!-- 2. Strategier for å vinne mediesesjonen -->
-<section>
-  <h2>2. Strategier – slå av og på én om gangen</h2>
-
-  <div class="strategi">
-    <div class="navn">A · Sesjonsanker</div>
-    <small>Et 60 sekunders, praktisk talt lydløst spor som holdes i gang, slik at Chrome
-    beholder mediesesjonen også når hovedlyden er pauset. Android kaster nemlig pausede
-    sesjoner etter noen minutter, og Chrome kan ikke vekkes igjen av et knappetrykk.</small>
-    <select id="ankerModus">
-      <option value="av">Av – ingen anker</option>
-      <option value="vedPause" selected>På når hovedlyden er pauset</option>
-      <option value="alltid">Alltid på</option>
-    </select>
-  </div>
-
-  <div class="strategi">
-    <div class="navn">B · Rapportert tilstand til bilen</div>
-    <small>Noen bilanlegg sender bare knappetrykk når telefonen melder at den faktisk
-    spiller. «Alltid spiller» lyver bevisst til bilen for å teste om det åpner kanalen.</small>
-    <select id="tilstandModus">
-      <option value="ekte" selected>Ekte tilstand (spiller/pauset)</option>
-      <option value="alltidSpiller">Alltid «spiller»</option>
-      <option value="ingen">Ikke rapporter tilstand</option>
-    </select>
-  </div>
-
-  <div class="strategi">
-    <div class="navn">C · Posisjonsstatus</div>
-    <small>Sender lengde og posisjon til bilen, som noen anlegg krever før de regner
-    telefonen som en fullverdig mediespiller.</small>
-    <div class="rad">
-      <input type="checkbox" id="posisjonPa" checked style="width:28px;height:28px">
-      <label for="posisjonPa">Send posisjonsstatus</label>
+  <section>
+    <h2>Knappekart</h2>
+    <div class="felt">
+      <label for="innKnappeoppsett">Hva rattknappene gjør</label>
+      <select id="innKnappeoppsett"></select>
+      <p class="hjelp" id="oppsettForklaring"></p>
     </div>
-  </div>
-
-  <div class="strategi">
-    <div class="navn">D · Metadata</div>
-    <small>Tittel, artist og coverbilde. Uten metadata viser bilen ingenting, og enkelte
-    anlegg ignorerer kilder de ikke kan navngi.</small>
-    <div class="rad">
-      <input type="checkbox" id="metadataPa" checked style="width:28px;height:28px">
-      <label for="metadataPa">Send metadata</label>
+    <div class="felt">
+      <label for="innDobbelVindu">Dobbeltklikkvindu: <span id="visDobbelVindu"></span> ms</label>
+      <input type="range" id="innDobbelVindu" min="200" max="800" step="50" style="width:100%">
+      <p class="hjelp">Gjelder bare oppsett som bruker dobbeltklikk. Kortere vindu gir
+        raskere respons, men krever raskere dobbeltklikk.</p>
     </div>
-  </div>
+  </section>
 
-  <div class="strategi">
-    <div class="navn">E · Gjenerobre sesjonen</div>
-    <small>Android gir knappene til den appen som <em>sist</em> spilte lyd og har en
-    sesjon. Denne stopper og starter avspillingen på nytt, slik at Chrome blir den
-    sist spilte appen. Trykk denne hvis en annen app har kapret knappene.</small>
-    <button id="knappGjenerobre" class="primaer">⟳ Gjenerobre mediesesjonen</button>
-  </div>
-</section>
+  <section>
+    <h2>Avspilling</h2>
+    <div class="felt">
+      <label for="innSpolLengde">Spolelengde</label>
+      <select id="innSpolLengde">
+        <option value="3">3 sekunder</option>
+        <option value="5">5 sekunder</option>
+        <option value="10">10 sekunder</option>
+        <option value="15">15 sekunder</option>
+      </select>
+    </div>
+    <div class="felt">
+      <label for="innHastighet">Hastighet</label>
+      <select id="innHastighet">
+        <option value="1">1,0×</option>
+        <option value="1.25">1,25×</option>
+        <option value="1.5">1,5×</option>
+      </select>
+    </div>
+  </section>
 
-<!-- 3. Media Session-logg -->
-<section>
-  <h2>3. Mediekommando-logg</h2>
-  <div class="rad" style="margin-bottom:10px">
-    <input type="checkbox" id="pipPa" checked style="width:28px;height:28px">
-    <label for="pipPa">Pip ved hver mediekommando</label>
-    <button id="knappToner">🔊 Hør tonene</button>
-  </div>
-  <div id="logg"></div>
-  <div class="rad" style="margin-top:8px">
-    <button id="kopierLogg">📋 Kopier logg</button>
-    <button id="tomLogg">Tøm logg</button>
-  </div>
-</section>
+  <section>
+    <h2>Kommentarer</h2>
+    <div class="rad felt">
+      <input type="checkbox" id="innPip">
+      <label for="innPip">Lydsignaler (pip) ved start og stopp av lytting</label>
+    </div>
+    <div class="rad felt">
+      <input type="checkbox" id="innBackup">
+      <label for="innBackup">Ta alltid opp lyd av kommentaren som sikkerhetskopi</label>
+    </div>
+    <div class="felt">
+      <label for="innSprak">Språk for talegjenkjenning</label>
+      <select id="innSprak">
+        <option value="nb-NO">Norsk bokmål (nb-NO)</option>
+        <option value="nn-NO">Norsk nynorsk (nn-NO)</option>
+        <option value="en-US">Engelsk (en-US)</option>
+      </select>
+    </div>
+  </section>
 
-<!-- 4. Dikteringstest -->
-<section>
-  <h2>4. Diktering (nb-NO)</h2>
-  <button id="knappDikter" class="primaer">🎙 Start diktering</button>
-  <div class="rad" style="margin:8px 0">
-    <input type="checkbox" id="vaktPa" checked style="width:28px;height:28px">
-    <label for="vaktPa">Hold lyden pauset mens jeg dikterer (som i fase 2)</label>
-  </div>
-  <div id="dikterStatus">Ikke aktiv</div>
-  <div id="tolketTekst"><span class="interim">Tolket tekst vises her …</span></div>
-  <div id="dikterFeil"></div>
-  <p class="hjelp">Kjør gjerne testen både med avspilling i gang og pauset, for å se hvordan Bluetooth-mikrofonen og bilstøyen påvirker resultatet.</p>
-</section>
+  <section>
+    <h2>Tidskode</h2>
+    <div class="felt">
+      <label for="innFps">Bilder per sekund (for HH:MM:SS:FF)</label>
+      <select id="innFps">
+        <option value="24">24 fps</option>
+        <option value="25">25 fps</option>
+        <option value="30">30 fps</option>
+      </select>
+    </div>
+  </section>
 
-<!-- 5. Mikrofon-info -->
-<section>
-  <h2>5. Mikrofon</h2>
-  <button id="knappMic">Sjekk mikrofon</button>
-  <div id="micInfo">Ikke sjekket ennå.</div>
-</section>
+  <section>
+    <h2>Diagnose</h2>
+    <div class="rad felt">
+      <input type="checkbox" id="innDiagnose">
+      <label for="innDiagnose">Vis diagnoselogg (til feilsøking i bil)</label>
+    </div>
+    <div id="diagnosePanel" style="display:none">
+      <div id="logg"></div>
+      <div class="rad" style="margin-top:8px">
+        <button class="liten" id="kopierLogg">📋 Kopier logg</button>
+        <button class="liten" id="tomLogg">Tøm logg</button>
+      </div>
+    </div>
+  </section>
+</div>
 
 <script>
 'use strict';
 
-// Bump denne ved hver endring, så det er lett å se på skjermen om telefonen
-// har lastet siste versjon (Chrome cacher iblant aggressivt i bil).
-const VERSJON = 'v8';
-document.getElementById('versjon').textContent = VERSJON;
+/* ═══════════════ Grunnlag ═══════════════ */
 
-/* ---------- Hjelpere ---------- */
+// Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
+// har lastet siste versjon.
+const VERSJON = 'v1.0';
 
 const $ = id => document.getElementById(id);
-const spiller = $('spiller');
-const loggEl = $('logg');
+$('versjon').textContent = VERSJON;
 
-function formatTid(sek) {
-  if (!isFinite(sek)) return '00:00';
-  sek = Math.max(0, sek);
-  const t = Math.floor(sek / 3600);
-  const m = Math.floor((sek % 3600) / 60);
-  const s = Math.floor(sek % 60);
-  const mmss = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-  return t > 0 ? String(t) + ':' + mmss : mmss;
-}
+/* ---------- Logg ---------- */
+
+const loggEl = $('logg');
 
 function klokkeslett() {
   const d = new Date();
   return d.toLocaleTimeString('nb-NO') + '.' + String(d.getMilliseconds()).padStart(3, '0');
 }
 
-// Skriver en linje øverst i loggen. type: 'media' | 'ok' | 'feil' | 'info'
 function logg(melding, type) {
   const rad = document.createElement('div');
-  rad.className = 'rad-logg';
-  rad.innerHTML =
-    '<span class="klokke">' + klokkeslett() + '</span>' +
-    '<span class="medietid">[' + formatTid(spiller.currentTime) + ']</span>' +
-    '<span class="' + (type || 'info') + '"></span>';
-  rad.lastChild.textContent = melding;
+  const k = document.createElement('span');
+  k.className = 'klokke';
+  k.textContent = klokkeslett();
+  const t = document.createElement('span');
+  t.className = type || 'info';
+  t.textContent = melding;
+  rad.append(k, t);
   loggEl.prepend(rad);
-  // Begrens loggen så siden ikke blir treg på lange turer
-  while (loggEl.children.length > 300) loggEl.lastChild.remove();
+  while (loggEl.children.length > 400) loggEl.lastChild.remove();
 }
 
 $('tomLogg').onclick = () => { loggEl.innerHTML = ''; };
-
-// Kopierer loggen som ren tekst, eldste linje først (lettest å lese ved liming)
 $('kopierLogg').onclick = async () => {
-  const linjer = Array.from(loggEl.children).reverse()
-    .map(rad => Array.from(rad.children).map(s => s.textContent).join(' '))
-    .join('\n');
+  const tekst = Array.from(loggEl.children).reverse()
+    .map(r => Array.from(r.children).map(s => s.textContent).join(' ')).join('\n');
   const knapp = $('kopierLogg');
   try {
-    await navigator.clipboard.writeText(linjer);
+    await navigator.clipboard.writeText(tekst);
     knapp.textContent = '✓ Kopiert';
   } catch (e) {
-    // Reserveløsning for eldre/begrensede kontekster
     const ta = document.createElement('textarea');
-    ta.value = linjer;
+    ta.value = tekst;
     document.body.append(ta);
     ta.select();
-    const ok = document.execCommand('copy');
+    knapp.textContent = document.execCommand('copy') ? '✓ Kopiert' : 'Feilet';
     ta.remove();
-    knapp.textContent = ok ? '✓ Kopiert' : 'Kopiering feilet';
   }
   setTimeout(() => { knapp.textContent = '📋 Kopier logg'; }, 2000);
 };
 
-function settStatus(tekst) {
-  $('statusTekst').textContent = tekst;
+/* ---------- Tid og tidskode ---------- */
+
+function formatTid(sek) {
+  if (!isFinite(sek) || sek < 0) sek = 0;
+  const t = Math.floor(sek / 3600);
+  const m = Math.floor((sek % 3600) / 60);
+  const s = Math.floor(sek % 60);
+  const mmss = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  return t > 0 ? t + ':' + mmss : mmss;
 }
 
-/* ---------- Lydsignaler ---------- */
-
-// Hver mediekommando får sin egen tonesekvens, slik at knappene kan kartlegges
-// på gehør uten å se på skjermen. Tonene genereres med Web Audio, ingen filer.
-let lydCtx = null;
-
-function vekkLyd() {
-  if (!lydCtx) lydCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (lydCtx.state === 'suspended') lydCtx.resume();
+// Tidskode i valgt eksportformat
+function tidskode(sek, format, fps) {
+  if (!isFinite(sek) || sek < 0) sek = 0;
+  const t = Math.floor(sek / 3600);
+  const m = Math.floor((sek % 3600) / 60);
+  const s = Math.floor(sek % 60);
+  const p2 = n => String(n).padStart(2, '0');
+  if (format === 'MMSS') {
+    return p2(Math.floor(sek / 60)) + ':' + p2(s);
+  }
+  if (format === 'HHMMSSmmm') {
+    const ms = Math.floor((sek % 1) * 1000);
+    return p2(t) + ':' + p2(m) + ':' + p2(s) + '.' + String(ms).padStart(3, '0');
+  }
+  // HH:MM:SS:FF – rammebasert, som Frame.io bruker også for lyd
+  let f = Math.floor((sek % 1) * fps);
+  if (f >= fps) f = fps - 1;
+  return p2(t) + ':' + p2(m) + ':' + p2(s) + ':' + p2(f);
 }
 
-// toner: liste med frekvenser i Hz, spilles etter hverandre
-function pip(toner, tonelengde) {
-  if (!$('pipPa').checked) return;
-  try {
-    vekkLyd();
-    const lengde = tonelengde || 0.12;
-    toner.forEach((frekvens, i) => {
-      const osc = lydCtx.createOscillator();
-      const gain = lydCtx.createGain();
-      const start = lydCtx.currentTime + i * lengde;
-      osc.frequency.value = frekvens;
-      osc.type = 'sine';
-      // Myk inn- og utgang så det ikke knepper
-      gain.gain.setValueAtTime(0, start);
-      gain.gain.linearRampToValueAtTime(0.35, start + 0.01);
-      gain.gain.setValueAtTime(0.35, start + lengde - 0.03);
-      gain.gain.linearRampToValueAtTime(0, start + lengde - 0.005);
-      osc.connect(gain).connect(lydCtx.destination);
-      osc.start(start);
-      osc.stop(start + lengde);
-    });
-  } catch (e) { /* lyd er kun hjelpemiddel – aldri kritisk */ }
-}
+/* ═══════════════ Innstillinger ═══════════════ */
 
-// Tonesekvens per kommando: stigende = framover, fallende = bakover.
-// Disse skal KUN høres når en ekte mediekommando kommer fra bilen/ratt/
-// headset – de brukes til å kartlegge rattknapper på gehør.
-const PIP = {
-  play:          [880],
-  pause:         [560],
-  stop:          [440, 380],
-  nexttrack:     [700, 1100],
-  previoustrack: [1100, 700],
-  seekforward:   [700, 1000, 1300],
-  seekbackward:  [1300, 1000, 700],
-  seekto:        [1200, 1200]
+const STANDARD = {
+  spolLengde: 5,
+  hastighet: 1,
+  knappeoppsett: 'standard',
+  dobbelVindu: 400,
+  fps: 25,
+  csvFormat: 'HHMMSSFF',
+  pip: true,
+  backup: true,
+  sprak: 'nb-NO',
+  diagnose: false
 };
 
-// Skjermknapper får et eget, dumpt «klikk» – bevisst ulikt PIP-tonene over,
-// slik at en tone i bilen aldri kan forveksles med at du selv trykket på
-// telefonskjermen.
-function pipSkjerm() {
-  if (!$('pipPa').checked) return;
+let innst = Object.assign({}, STANDARD);
+
+function lastInnstillinger() {
   try {
-    vekkLyd();
-    const start = lydCtx.currentTime;
-    const osc = lydCtx.createOscillator();
-    const gain = lydCtx.createGain();
-    osc.frequency.value = 220;
-    osc.type = 'square';
-    gain.gain.setValueAtTime(0.15, start);
-    gain.gain.linearRampToValueAtTime(0, start + 0.04);
-    osc.connect(gain).connect(lydCtx.destination);
-    osc.start(start);
-    osc.stop(start + 0.05);
-  } catch (e) { /* lyd er kun hjelpemiddel – aldri kritisk */ }
+    const lagret = JSON.parse(localStorage.getItem('medhor-innstillinger') || '{}');
+    innst = Object.assign({}, STANDARD, lagret);
+  } catch (e) {
+    logg('Kunne ikke lese innstillinger, bruker standard', 'feil');
+  }
 }
 
-/* ---------- Sesjonsanker (strategi A) ---------- */
+function lagreInnstillinger() {
+  try {
+    localStorage.setItem('medhor-innstillinger', JSON.stringify(innst));
+  } catch (e) {
+    logg('Kunne ikke lagre innstillinger: ' + e.message, 'feil');
+  }
+}
 
-// Bygger et WAV-spor på 60 sekunder som i praksis er lydløst, men ikke digital
-// stillhet: noen plattformer ser bort fra spor som bare inneholder nuller.
-// Amplituden er 1 av 32768, altså langt under hørbarhet.
+/* ═══════════════ Knappekart ═══════════════ */
+
+// Hver kommando fra bil/headset kan gi én handling ved enkeltklikk og
+// eventuelt en annen ved dobbeltklikk. Handlingene er:
+//   trykk        – flytt kommentarsyklusen ett hakk videre
+//   spolFram     – hopp framover
+//   spolTilbake  – hopp bakover
+const OPPSETT = {
+  standard: {
+    navn: 'Standard – play/pause utløser kommentar',
+    forklaring: 'Play/pause/stopp starter og avslutter kommentarmodus. ' +
+      'Spor fram og tilbake spoler. Alt reagerer umiddelbart. ' +
+      'Krever at du når play/pause-knappen – på Ariya sitter den under skjermen, ikke på rattet.',
+    kart: {
+      play: { enkelt: 'trykk' },
+      pause: { enkelt: 'trykk' },
+      stop: { enkelt: 'trykk' },
+      nexttrack: { enkelt: 'spolFram' },
+      previoustrack: { enkelt: 'spolTilbake' },
+      seekforward: { enkelt: 'spolFram' },
+      seekbackward: { enkelt: 'spolTilbake' }
+    }
+  },
+  framoverUtloser: {
+    navn: 'Framover utløser – dobbeltklikk bakover for å spole fram',
+    forklaring: 'Spor fram utløser kommentar og reagerer umiddelbart. ' +
+      'Spor tilbake spoler bakover ved enkeltklikk og framover ved dobbeltklikk. ' +
+      'Ulempe: bakoverspoling forsinkes med dobbeltklikkvinduet og kan ikke hamres.',
+    kart: {
+      play: { enkelt: 'trykk' },
+      pause: { enkelt: 'trykk' },
+      stop: { enkelt: 'trykk' },
+      nexttrack: { enkelt: 'trykk' },
+      previoustrack: { enkelt: 'spolTilbake', dobbel: 'spolFram' },
+      seekforward: { enkelt: 'spolFram' },
+      seekbackward: { enkelt: 'spolTilbake' }
+    }
+  },
+  speilvariant: {
+    navn: 'Speilvariant – bakover kan hamres',
+    forklaring: 'Spor tilbake spoler bakover umiddelbart og kan trykkes i rask rekkefølge. ' +
+      'Spor fram utløser kommentar ved enkeltklikk og spoler framover ved dobbeltklikk. ' +
+      'Tidskoden fryses ved første klikk, så kommentaren får riktig tid selv om pausen kommer litt etter.',
+    kart: {
+      play: { enkelt: 'trykk' },
+      pause: { enkelt: 'trykk' },
+      stop: { enkelt: 'trykk' },
+      nexttrack: { enkelt: 'trykk', dobbel: 'spolFram' },
+      previoustrack: { enkelt: 'spolTilbake' },
+      seekforward: { enkelt: 'spolFram' },
+      seekbackward: { enkelt: 'spolTilbake' }
+    }
+  }
+};
+
+function gjeldendeKart() {
+  return (OPPSETT[innst.knappeoppsett] || OPPSETT.standard).kart;
+}
+
+/* ═══════════════ Database ═══════════════ */
+
+let db = null;
+
+function aapneDb() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open('medhor', 1);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains('prosjekter')) d.createObjectStore('prosjekter', { keyPath: 'id' });
+      if (!d.objectStoreNames.contains('lydklipp')) d.createObjectStore('lydklipp', { keyPath: 'id' });
+    };
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+
+function dbKall(butikk, modus, arbeid) {
+  return new Promise((res, rej) => {
+    if (!db) return rej(new Error('Databasen er ikke åpnet'));
+    const tx = db.transaction(butikk, modus);
+    const req = arbeid(tx.objectStore(butikk));
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+
+const dbSkriv  = (butikk, verdi) => dbKall(butikk, 'readwrite', s => s.put(verdi));
+const dbLes    = (butikk, id)    => dbKall(butikk, 'readonly',  s => s.get(id));
+const dbAlle   = butikk          => dbKall(butikk, 'readonly',  s => s.getAll());
+const dbSlett  = (butikk, id)    => dbKall(butikk, 'readwrite', s => s.delete(id));
+
+function nyId() {
+  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+}
+
+/* ═══════════════ Prosjekter ═══════════════ */
+
+let prosjekt = null;      // aktivt prosjekt
+let prosjekter = [];
+
+async function lastProsjekter() {
+  prosjekter = await dbAlle('prosjekter');
+  prosjekter.sort((a, b) => b.opprettet - a.opprettet);
+  tegnProsjektListe();
+}
+
+async function lagreProsjekt() {
+  if (!prosjekt) return;
+  await dbSkriv('prosjekter', prosjekt);
+}
+
+async function nyttProsjekt(filnavn, tittel) {
+  prosjekt = {
+    id: nyId(),
+    filnavn: filnavn,
+    tittel: tittel || filnavn,
+    opprettet: Date.now(),
+    sistPosisjonSek: 0,
+    kommentarer: []
+  };
+  await lagreProsjekt();
+  await lastProsjekter();
+  logg('Nytt prosjekt: ' + prosjekt.tittel, 'ok');
+}
+
+function tegnProsjektListe() {
+  const el = $('prosjektListe');
+  el.innerHTML = '';
+  if (!prosjekter.length) {
+    el.innerHTML = '<div class="tom">Ingen prosjekter ennå. Velg en lydfil for å lage det første.</div>';
+    return;
+  }
+  for (const p of prosjekter) {
+    const rad = document.createElement('div');
+    rad.className = 'prosjekt' + (prosjekt && p.id === prosjekt.id ? ' aktiv' : '');
+    const info = document.createElement('div');
+    info.className = 'info';
+    const navn = document.createElement('div');
+    navn.className = 'navn';
+    navn.textContent = p.tittel;
+    const under = document.createElement('div');
+    under.className = 'under';
+    under.textContent = p.kommentarer.length + ' kommentarer · ' +
+      new Date(p.opprettet).toLocaleDateString('nb-NO');
+    info.append(navn, under);
+
+    const velg = document.createElement('button');
+    velg.className = 'liten';
+    velg.textContent = prosjekt && p.id === prosjekt.id ? 'Aktivt' : 'Velg';
+    velg.disabled = !!(prosjekt && p.id === prosjekt.id);
+    velg.onclick = async () => {
+      prosjekt = p;
+      $('tittelFelt').value = p.tittel;
+      logg('Byttet til prosjekt: ' + p.tittel, 'ok');
+      tegnProsjektListe();
+      visAktivtProsjekt();
+      oppdaterStartKnapp();
+    };
+
+    const slett = document.createElement('button');
+    slett.className = 'liten fare';
+    slett.textContent = 'Slett';
+    slett.onclick = async () => {
+      if (!confirm('Slette «' + p.tittel + '» med ' + p.kommentarer.length + ' kommentarer?')) return;
+      for (const k of p.kommentarer) {
+        if (k.lydBlobRef) await dbSlett('lydklipp', k.lydBlobRef).catch(() => {});
+      }
+      await dbSlett('prosjekter', p.id);
+      if (prosjekt && prosjekt.id === p.id) prosjekt = null;
+      await lastProsjekter();
+      visAktivtProsjekt();
+      oppdaterStartKnapp();
+      logg('Slettet prosjekt: ' + p.tittel, 'info');
+    };
+
+    rad.append(info, velg, slett);
+    el.append(rad);
+  }
+}
+
+function visAktivtProsjekt() {
+  const el = $('aktivtProsjekt');
+  if (!prosjekt) {
+    el.className = 'tom';
+    el.textContent = 'Ingen prosjekter ennå.';
+    return;
+  }
+  el.className = '';
+  el.innerHTML = '';
+  const navn = document.createElement('div');
+  navn.style.fontWeight = '700';
+  navn.style.fontSize = '1.1rem';
+  navn.textContent = prosjekt.tittel;
+  const under = document.createElement('div');
+  under.style.color = 'var(--demp)';
+  under.style.marginTop = '4px';
+  under.textContent = prosjekt.kommentarer.length + ' kommentarer · fil: ' + prosjekt.filnavn +
+    (lydErValgt() ? '' : ' · lydfil ikke valgt ennå');
+  el.append(navn, under);
+}
+
+/* ═══════════════ Lyd ═══════════════ */
+
+const spiller = new Audio();
+spiller.preload = 'metadata';
+let lydUrl = null;
+
+function lydErValgt() { return !!lydUrl; }
+
+// Sesjonsanker: uhørbart spor som holder Androids mediesesjon i live mens
+// hovedlyden er pauset. Uten dette kastes sesjonen etter noen minutter, og
+// rattknappene slutter å virke. Amplituden er 1 av 32768 – langt under hørbarhet,
+// men ikke digital stillhet, som enkelte plattformer ser bort fra.
 function lagStilleWav(sekunder) {
   const rate = 8000;
   const antall = rate * sekunder;
@@ -479,10 +730,10 @@ function lagStilleWav(sekunder) {
   tekst(8, 'WAVE');
   tekst(12, 'fmt ');
   dv.setUint32(16, 16, true);
-  dv.setUint16(20, 1, true);            // PCM
-  dv.setUint16(22, 1, true);            // mono
+  dv.setUint16(20, 1, true);
+  dv.setUint16(22, 1, true);
   dv.setUint32(24, rate, true);
-  dv.setUint32(28, rate * 2, true);     // byte per sekund
+  dv.setUint32(28, rate * 2, true);
   dv.setUint16(32, 2, true);
   dv.setUint16(34, 16, true);
   tekst(36, 'data');
@@ -493,127 +744,61 @@ function lagStilleWav(sekunder) {
 
 const anker = new Audio();
 anker.loop = true;
-anker.preload = 'auto';
 anker.src = lagStilleWav(60);
 
-anker.addEventListener('play', () => logg('Sesjonsanker: spiller', 'info'));
-anker.addEventListener('pause', () => logg('Sesjonsanker: stoppet', 'info'));
-
-// Avgjør om ankeret skal gå, ut fra valgt strategi og hovedlydens tilstand
+// Ankeret skal gå når vi er i kjøremodus og hovedlyden ikke spiller
 function oppdaterAnker() {
-  const modus = $('ankerModus').value;
-  const skalSpille = modus === 'alltid' ||
-    (modus === 'vedPause' && spiller.src && spiller.paused);
+  const skalSpille = visningNa === 'kjoremodus' && spiller.paused;
   if (skalSpille && anker.paused) {
-    anker.play().catch(err => logg('Sesjonsanker kunne ikke starte: ' + err.message, 'feil'));
+    anker.play().catch(err => logg('Sesjonsanker startet ikke: ' + err.message, 'feil'));
   } else if (!skalSpille && !anker.paused) {
     anker.pause();
   }
 }
 
-/* ---------- Lydkilde ---------- */
+/* ---------- Pip ---------- */
 
-let gjeldendeTittel = 'Ingen fil valgt';
+let lydCtx = null;
 
-$('filVelger').addEventListener('change', e => {
-  const fil = e.target.files[0];
-  if (!fil) return;
-  spiller.src = URL.createObjectURL(fil);
-  gjeldendeTittel = fil.name;
-  logg('Lastet fil: ' + fil.name, 'ok');
-  settMetadata();
-});
-
-$('lastUrl').onclick = () => {
-  const url = $('urlFelt').value.trim();
-  if (!url) return;
-  spiller.src = url;
-  gjeldendeTittel = url.split('/').pop() || url;
-  logg('Lastet URL: ' + url, 'ok');
-  settMetadata();
-};
-
-/* ---------- Avspilling og spoling ---------- */
-
-function spolLengde() {
-  return Number($('spolLengde').value);
+function vekkLyd() {
+  try {
+    if (!lydCtx) lydCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (lydCtx.state === 'suspended') lydCtx.resume();
+  } catch (e) { /* lyd er hjelpemiddel, aldri kritisk */ }
 }
 
-$('spolLengde').addEventListener('change', () => {
-  document.querySelectorAll('.spolTall').forEach(el => el.textContent = spolLengde());
-});
-
-function spol(deltaSek, kilde) {
-  if (!spiller.src) return;
-  spiller.currentTime = Math.max(0, Math.min(spiller.duration || Infinity, spiller.currentTime + deltaSek));
-  logg('Spolte ' + (deltaSek > 0 ? '+' : '') + deltaSek + ' s → ' + formatTid(spiller.currentTime) +
-    ' – utløst av ' + (kilde || 'ukjent'), 'info');
-  oppdaterPosisjon();
+function pip(toner, lengde) {
+  if (!innst.pip) return;
+  try {
+    vekkLyd();
+    const varighet = lengde || 0.11;
+    toner.forEach((frekvens, i) => {
+      const osc = lydCtx.createOscillator();
+      const gain = lydCtx.createGain();
+      const start = lydCtx.currentTime + i * varighet;
+      osc.frequency.value = frekvens;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.4, start + 0.01);
+      gain.gain.setValueAtTime(0.4, start + varighet - 0.03);
+      gain.gain.linearRampToValueAtTime(0, start + varighet - 0.005);
+      osc.connect(gain).connect(lydCtx.destination);
+      osc.start(start);
+      osc.stop(start + varighet);
+    });
+  } catch (e) { /* ignorer */ }
 }
 
-$('knappPlay').onclick = () => {
-  pipSkjerm();
-  sisteUtloser = { kilde: 'skjermknapp', tid: Date.now() };
-  spiller.play().catch(err => logg('Kunne ikke starte avspilling: ' + err.message, 'feil'));
+const PIP = {
+  lytter:    [700, 1100],        // stigende: nå lytter jeg
+  lagret:    [1100, 700],        // fallende: lagret
+  gjenoppta: [880],              // enkelt: spiller igjen
+  angre:     [600, 480, 380],    // nedover: noe ble slettet
+  feil:      [320, 260]          // lav og dyster
 };
-$('knappPause').onclick = () => {
-  pipSkjerm();
-  sisteUtloser = { kilde: 'skjermknapp', tid: Date.now() };
-  spiller.pause();
-};
-$('knappFram').onclick = () => { pipSkjerm(); spol(spolLengde(), 'skjermknapp'); };
-$('knappTilbake').onclick = () => { pipSkjerm(); spol(-spolLengde(), 'skjermknapp'); };
 
-// Når mikrofonen åpnes, tar Android lydfokus fra Chrome, og Chrome pauser
-// lyden av seg selv – men gjenopptar den også av seg selv når fokus slippes,
-// midt i dikteringen. Denne vakten holder lyden pauset mens vi lytter, slik
-// fase 2 krever. Kan slås av for å se den rå oppførselen.
-let holdPause = false;
+/* ═══════════════ Media Session ═══════════════ */
 
-// Hvem utløste sist en endring? Brukes til å skille et ekte knappetrykk fra
-// pause/play som Android selv forårsaker (f.eks. når Bluetooth kobles fra).
-let sisteUtloser = { kilde: null, tid: 0 };
-
-function utloserTekst() {
-  if (Date.now() - sisteUtloser.tid < 500 && sisteUtloser.kilde) {
-    return ' – utløst av ' + sisteUtloser.kilde;
-  }
-  return ' – UTEN forutgående kommando (systemet selv)';
-}
-
-// Logg det lydelementet faktisk gjør – uavhengig av hvor kommandoen kom fra
-spiller.addEventListener('play', () => {
-  if (holdPause && $('vaktPa').checked) {
-    spiller.pause();
-    logg('Blokkerte automatisk gjenopptak (lydfokus tilbake)', 'media');
-    return;
-  }
-  logg('Avspilling startet' + utloserTekst(), 'ok');
-  settStatus('SPILLER');
-  oppdaterTilstand();
-  oppdaterAnker();
-  visSesjonStatus();
-  beOmWakeLock();
-});
-spiller.addEventListener('pause', () => {
-  logg('Avspilling pauset' + utloserTekst(), 'ok');
-  settStatus('PAUSE');
-  oppdaterTilstand();
-  oppdaterAnker();
-  visSesjonStatus();
-});
-spiller.addEventListener('ended', () => logg('Lydfilen er ferdig', 'info'));
-spiller.addEventListener('error', () => {
-  const e = spiller.error;
-  logg('Lydfeil (kode ' + (e ? e.code : '?') + '): ' + (e && e.message ? e.message : 'ukjent'), 'feil');
-});
-
-// Stor tidsvisning i statuslinjen
-setInterval(() => { $('statusTid').textContent = formatTid(spiller.currentTime); }, 250);
-
-/* ---------- Media Session ---------- */
-
-// Genererer et enkelt coverbilde, så vi ser hva bilskjermen viser av metadata
 function lagCover() {
   const c = document.createElement('canvas');
   c.width = c.height = 512;
@@ -621,506 +806,891 @@ function lagCover() {
   g.fillStyle = '#1c4d80';
   g.fillRect(0, 0, 512, 512);
   g.fillStyle = '#e8eaf0';
-  g.font = 'bold 90px system-ui, sans-serif';
+  g.font = 'bold 96px system-ui, sans-serif';
   g.textAlign = 'center';
-  g.fillText('Medhør', 256, 240);
-  g.font = '48px system-ui, sans-serif';
-  g.fillText('fase 1-test', 256, 320);
+  g.fillText('Medhør', 256, 290);
   return c.toDataURL('image/png');
 }
 const coverUrl = lagCover();
 
 function settMetadata() {
   if (!('mediaSession' in navigator)) return;
-  if (!$('metadataPa').checked) {          // strategi D avslått
-    navigator.mediaSession.metadata = null;
-    return;
-  }
   navigator.mediaSession.metadata = new MediaMetadata({
-    title: gjeldendeTittel,
+    title: prosjekt ? prosjekt.tittel : 'Medhør',
     artist: 'Medhør',
-    album: 'Fase 1-test',
+    album: 'Korrekturlytting',
     artwork: [{ src: coverUrl, sizes: '512x512', type: 'image/png' }]
   });
 }
 
-// Strategi B: hva vi forteller bilen om avspillingstilstanden
-function oppdaterTilstand() {
-  if (!('mediaSession' in navigator)) return;
-  const modus = $('tilstandModus').value;
-  if (modus === 'ingen') navigator.mediaSession.playbackState = 'none';
-  else if (modus === 'alltidSpiller') navigator.mediaSession.playbackState = 'playing';
-  else navigator.mediaSession.playbackState = spiller.paused ? 'paused' : 'playing';
-}
-
-// Holder Chrome/bilen oppdatert om posisjon (viser ev. fremdrift på bilskjermen)
 function oppdaterPosisjon() {
   if (!('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) return;
-  if (!$('posisjonPa').checked) return;    // strategi C avslått
-  if (!isFinite(spiller.duration)) return;
+  if (!isFinite(spiller.duration) || !lydErValgt()) return;
   try {
     navigator.mediaSession.setPositionState({
       duration: spiller.duration,
       playbackRate: spiller.playbackRate,
-      position: Math.min(spiller.currentTime, spiller.duration)
+      position: Math.min(Math.max(spiller.currentTime, 0), spiller.duration)
     });
-  } catch (e) { /* ugyldig tilstand rett etter bytte av kilde – ufarlig */ }
+  } catch (e) { /* ugyldig tilstand rett etter kildebytte */ }
 }
-let sistPosisjon = 0;
-spiller.addEventListener('timeupdate', () => {
-  if (Date.now() - sistPosisjon > 2000) { sistPosisjon = Date.now(); oppdaterPosisjon(); }
-});
-spiller.addEventListener('loadedmetadata', oppdaterPosisjon);
+
+// Ventende enkeltklikk, for oppsett som også har en dobbeltklikkfunksjon
+let ventendeKlikk = null;
+
+// Alle mediekommandoer går hit. play/pause/stop skilles ALDRI semantisk:
+// bilen sender aldri play mens ankeret spiller, så den ville aldri kommet.
+function haandterKommando(kommando) {
+  logg('MEDIAKOMMANDO: ' + kommando, 'media');
+  const oppf = gjeldendeKart()[kommando];
+  if (!oppf) { logg('Kommandoen har ingen funksjon i dette oppsettet', 'info'); return; }
+
+  // Enkel kommando uten dobbeltklikk – utfør med én gang
+  if (!oppf.dobbel) {
+    utfoer(oppf.enkelt, spiller.currentTime);
+    return;
+  }
+
+  if (ventendeKlikk && ventendeKlikk.kommando === kommando) {
+    // Andre klikk innenfor vinduet
+    clearTimeout(ventendeKlikk.timer);
+    const intervall = Date.now() - ventendeKlikk.tid;
+    const frossen = ventendeKlikk.frossenTid;
+    ventendeKlikk = null;
+    logg('Dobbeltklikk (' + intervall + ' ms) → ' + oppf.dobbel, 'media');
+    utfoer(oppf.dobbel, frossen);
+    return;
+  }
+
+  // Første klikk: frys tidskoden nå, avgjør handling når vinduet løper ut
+  const frossenTid = spiller.currentTime;
+  ventendeKlikk = {
+    kommando: kommando,
+    tid: Date.now(),
+    frossenTid: frossenTid,
+    timer: setTimeout(() => {
+      ventendeKlikk = null;
+      logg('Enkeltklikk bekreftet → ' + oppf.enkelt, 'media');
+      utfoer(oppf.enkelt, frossenTid);
+    }, innst.dobbelVindu)
+  };
+}
+
+function utfoer(handling, tidspunkt) {
+  if (handling === 'trykk') nesteSteg(tidspunkt);
+  else if (handling === 'spolFram') spol(innst.spolLengde);
+  else if (handling === 'spolTilbake') spol(-innst.spolLengde);
+}
 
 function registrerMediaSession() {
   if (!('mediaSession' in navigator)) {
-    logg('Media Session API er IKKE tilgjengelig i denne nettleseren', 'feil');
+    logg('Media Session API mangler i denne nettleseren', 'feil');
     return;
   }
-  // Hver handling logges tydelig, så vi ser nøyaktig hva ratt/headset sender
-  const handlinger = {
-    play: () => {
-      logg('MEDIAKOMMANDO: play', 'media');
-      spiller.play().catch(err => logg('play feilet: ' + err.message, 'feil'));
-    },
-    pause: () => {
-      logg('MEDIAKOMMANDO: pause', 'media');
-      spiller.pause();
-    },
-    stop: () => {
-      logg('MEDIAKOMMANDO: stop', 'media');
-      spiller.pause();
-    },
-    nexttrack: () => {
-      logg('MEDIAKOMMANDO: nexttrack', 'media');
-      spol(spolLengde(), 'mediekommando (nexttrack)');
-    },
-    previoustrack: () => {
-      logg('MEDIAKOMMANDO: previoustrack', 'media');
-      spol(-spolLengde(), 'mediekommando (previoustrack)');
-    },
-    seekforward: d => {
-      logg('MEDIAKOMMANDO: seekforward' + (d && d.seekOffset ? ' (' + d.seekOffset + ' s)' : ''), 'media');
-      spol((d && d.seekOffset) || spolLengde(), 'mediekommando (seekforward)');
-    },
-    seekbackward: d => {
-      logg('MEDIAKOMMANDO: seekbackward' + (d && d.seekOffset ? ' (' + d.seekOffset + ' s)' : ''), 'media');
-      spol(-((d && d.seekOffset) || spolLengde()), 'mediekommando (seekbackward)');
-    },
-    seekto: d => {
-      logg('MEDIAKOMMANDO: seekto → ' + formatTid(d.seekTime), 'media');
-      if (typeof d.seekTime === 'number') { spiller.currentTime = d.seekTime; oppdaterPosisjon(); }
-    }
-  };
-  for (const [navn, fn] of Object.entries(handlinger)) {
+  for (const kommando of ['play', 'pause', 'stop', 'nexttrack', 'previoustrack',
+                          'seekforward', 'seekbackward']) {
     try {
-      // Innpakning: spill kjenningstonen og noter tidspunktet, slik at vi i
-      // ettertid kan skille kommandostyrt pause fra systemets egen pause.
-      navigator.mediaSession.setActionHandler(navn, d => {
-        sisteUtloser = { kilde: 'mediekommando', tid: Date.now() };
-        pip(PIP[navn] || [880]);
-        fn(d);
-      });
-      logg('Registrert handler: ' + navn, 'ok');
+      navigator.mediaSession.setActionHandler(kommando, () => haandterKommando(kommando));
     } catch (e) {
-      logg('Handler ikke støttet: ' + navn, 'feil');
+      logg('Handler ikke støttet: ' + kommando, 'info');
     }
   }
-  settMetadata();
-}
-
-/* ---------- Sesjonsdiagnostikk og strategistyring ---------- */
-
-// Oppsummerer om forutsetningene for at Chrome skal få en mediesesjon er på
-// plass. Selve sesjonen kan ikke leses av fra JavaScript – derfor er
-// mediekortet i varselfeltet den endelige fasiten.
-function visSesjonStatus() {
-  const el = $('sesjonStatus');
-  const varighet = spiller.duration;
-  const linjer = [];
-
-  const harKilde = !!spiller.src;
-  linjer.push(harKilde
-    ? '<span class="god">✓</span> Lydfil lastet'
-    : '<span class="darlig">✗</span> Ingen lydfil lastet');
-
-  if (harKilde && isFinite(varighet)) {
-    linjer.push(varighet >= 5
-      ? '<span class="god">✓</span> Lengde ' + formatTid(varighet) + ' (kravet er minst 5 sekunder)'
-      : '<span class="darlig">✗</span> Bare ' + Math.round(varighet) + ' s – for kort, Chrome lager ingen mediesesjon');
-  } else if (harKilde) {
-    linjer.push('<span class="darlig">?</span> Ukjent lengde – kan hindre mediesesjon');
-  }
-
-  const noeSpiller = !spiller.paused || !anker.paused;
-  linjer.push(noeSpiller
-    ? '<span class="god">✓</span> Lyd spiller nå' + (spiller.paused ? ' (kun sesjonsanker)' : '')
-    : '<span class="darlig">✗</span> Ingenting spiller – sesjonen kan falle bort');
-
-  linjer.push('Strategier: anker=' + $('ankerModus').value +
-    ', tilstand=' + $('tilstandModus').value +
-    ', posisjon=' + ($('posisjonPa').checked ? 'på' : 'av') +
-    ', metadata=' + ($('metadataPa').checked ? 'på' : 'av'));
-
-  el.innerHTML = linjer.join('<br>');
-}
-
-// Logger valgt strategikombinasjon, slik at den kopierte loggen alltid viser
-// hvilket oppsett som gjaldt da knappene ble testet.
-function loggStrategier(hva) {
-  logg('STRATEGI endret (' + hva + ') → anker=' + $('ankerModus').value +
-    ', tilstand=' + $('tilstandModus').value +
-    ', posisjon=' + ($('posisjonPa').checked ? 'på' : 'av') +
-    ', metadata=' + ($('metadataPa').checked ? 'på' : 'av'), 'media');
-}
-
-$('ankerModus').addEventListener('change', () => {
-  loggStrategier('anker');
-  oppdaterAnker();
-  visSesjonStatus();
-});
-$('tilstandModus').addEventListener('change', () => {
-  loggStrategier('tilstand');
-  oppdaterTilstand();
-  visSesjonStatus();
-});
-$('posisjonPa').addEventListener('change', () => {
-  loggStrategier('posisjon');
-  oppdaterPosisjon();
-  visSesjonStatus();
-});
-$('metadataPa').addEventListener('change', () => {
-  loggStrategier('metadata');
-  settMetadata();
-  visSesjonStatus();
-});
-
-// Strategi E: gjør Chrome til den appen som sist spilte lyd, og bygg
-// mediesesjonen opp på nytt fra bunnen.
-$('knappGjenerobre').onclick = async () => {
-  logg('=== GJENEROBRER MEDIESESJONEN ===', 'media');
-  const posisjon = spiller.currentTime;
-  const spilteFor = !spiller.paused;
+  // seekto brukes av bilens fremdriftslinje
   try {
-    spiller.pause();
-    anker.pause();
-    await new Promise(r => setTimeout(r, 400));
-    registrerMediaSession();          // registrer alle handlere på nytt
-    settMetadata();
-    if (spiller.src) {
-      sisteUtloser = { kilde: 'gjenerobring', tid: Date.now() };
-      await spiller.play();
-      spiller.currentTime = posisjon;
-      logg('Chrome spiller igjen – la den gå i minst 5 sekunder', 'ok');
-      if (!spilteFor) {
-        // Var den pauset før, la den spille litt og pause så igjen, slik at
-        // Chrome rekker å bli «sist spilte app» før vi går tilbake til pause.
-        setTimeout(() => {
-          sisteUtloser = { kilde: 'gjenerobring', tid: Date.now() };
-          spiller.pause();
-          logg('Tilbake til pause – sesjonen skal nå tilhøre Chrome', 'ok');
-        }, 6000);
+    navigator.mediaSession.setActionHandler('seekto', d => {
+      if (typeof d.seekTime === 'number') {
+        logg('MEDIAKOMMANDO: seekto → ' + formatTid(d.seekTime), 'media');
+        spiller.currentTime = d.seekTime;
+        oppdaterPosisjon();
       }
-    } else {
-      anker.play().catch(() => {});
-      logg('Ingen lydfil – startet kun sesjonsankeret', 'info');
+    });
+  } catch (e) { /* valgfri */ }
+  settMetadata();
+}
+
+/* ═══════════════ Tilstandsmaskin ═══════════════ */
+
+// KLAR → (trykk) → SPILLER → (trykk) → LYTTER → (trykk) → LAGRET → (trykk) → SPILLER
+let tilstand = 'KLAR';
+let kommentarTid = 0;       // frossen tidskode for kommentaren som lages nå
+let holdPause = false;      // blokkér Chromes egne gjenopptaksforsøk
+
+function settTilstand(ny) {
+  tilstand = ny;
+  const flate = $('trykkflate');
+  flate.className = '';
+  const hint = $('stortHint');
+  if (ny === 'SPILLER') {
+    $('stortStatus').textContent = 'SPILLER';
+    flate.classList.add('spiller');
+    hint.textContent = 'Trykk for å kommentere';
+  } else if (ny === 'LYTTER') {
+    $('stortStatus').textContent = 'LYTTER';
+    flate.classList.add('lytter');
+    hint.textContent = 'Snakk nå – trykk igjen for å lagre';
+  } else if (ny === 'LAGRET') {
+    $('stortStatus').textContent = 'LAGRET';
+    flate.classList.add('lagret');
+    hint.textContent = 'Trykk for å fortsette avspillingen';
+  } else {
+    $('stortStatus').textContent = 'KLAR';
+    hint.textContent = 'Trykk hvor som helst for å starte';
+  }
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.playbackState = spiller.paused ? 'paused' : 'playing';
+  }
+  oppdaterAnker();
+  logg('Tilstand: ' + ny, 'ok');
+}
+
+function nesteSteg(frossenTid) {
+  if (visningNa !== 'kjoremodus') return;
+  if (!lydErValgt()) { logg('Ingen lydfil valgt', 'feil'); pip(PIP.feil); return; }
+
+  if (tilstand === 'KLAR' || tilstand === 'LAGRET') {
+    gjenopptaAvspilling();
+  } else if (tilstand === 'SPILLER') {
+    startKommentar(frossenTid);
+  } else if (tilstand === 'LYTTER') {
+    avsluttKommentar();
+  }
+}
+
+function gjenopptaAvspilling() {
+  holdPause = false;
+  spiller.playbackRate = innst.hastighet;
+  spiller.play().then(() => {
+    pip(PIP.gjenoppta);
+    settTilstand('SPILLER');
+  }).catch(err => {
+    logg('Kunne ikke starte avspilling: ' + err.message, 'feil');
+    pip(PIP.feil);
+  });
+}
+
+function startKommentar(frossenTid) {
+  // Frys tidskoden nøyaktig der brukeren trykket, og sett lyden dit, slik at
+  // både visning og senere gjenopptak er eksakte.
+  kommentarTid = (typeof frossenTid === 'number') ? frossenTid : spiller.currentTime;
+  holdPause = true;
+  spiller.pause();
+  try { spiller.currentTime = kommentarTid; } catch (e) { /* utenfor lengden */ }
+  settTilstand('LYTTER');
+  pip(PIP.lytter);
+  $('liveTekst').textContent = '';
+  startGjenkjenning();
+  startOpptak();
+  logg('Kommentar startet ved ' + formatTid(kommentarTid), 'ok');
+}
+
+async function avsluttKommentar() {
+  const tekst = stoppGjenkjenning().trim();
+  const lydBlob = await stoppOpptak();
+
+  // Angrekommando: «slett» eller «angre» fjerner forrige kommentar
+  const foersteOrd = tekst.toLowerCase().replace(/[^a-zæøå\s]/g, '').trim().split(/\s+/)[0];
+  if (foersteOrd === 'slett' || foersteOrd === 'angre') {
+    const fjernet = await slettSisteKommentar();
+    pip(PIP.angre);
+    $('liveTekst').textContent = fjernet ? 'Slettet forrige kommentar' : 'Ingen kommentar å slette';
+    settTilstand('LAGRET');
+    return;
+  }
+
+  if (!tekst && !gjenkjenningFeilet && !lydBlob) {
+    // Ingenting sagt og ingen feil – forkast stille
+    logg('Tom kommentar forkastet', 'info');
+    $('liveTekst').textContent = 'Tom – ingenting lagret';
+    settTilstand('LAGRET');
+    return;
+  }
+
+  let lydRef = null;
+  if (lydBlob) {
+    lydRef = nyId();
+    try {
+      await dbSkriv('lydklipp', { id: lydRef, blob: lydBlob });
+    } catch (e) {
+      logg('Kunne ikke lagre lydopptak: ' + e.message, 'feil');
+      lydRef = null;
     }
-  } catch (e) {
-    logg('Gjenerobring feilet: ' + e.message, 'feil');
   }
-  oppdaterTilstand();
-  visSesjonStatus();
-};
 
-// Svar på den avgjørende observasjonen: ser brukeren Chromes mediekort?
-$('varselJa').onclick = () => {
-  logg('BRUKER BEKREFTER: Chrome-mediekortet ER synlig i varselfeltet', 'ok');
-  logg('→ Chrome har en mediesesjon. Trykk play/pause PÅ KORTET for å bekrefte at handlerne svarer.', 'info');
-};
-$('varselNei').onclick = () => {
-  logg('BRUKER BEKREFTER: Chrome-mediekortet er IKKE synlig', 'feil');
-  logg('→ Chrome har ingen mediesesjon. Rattknappene kan umulig nå fram. Sjekk lengde ≥ 5 s, at lyd faktisk spiller, og slå på sesjonsankeret.', 'feil');
-};
+  const kommentar = {
+    id: nyId(),
+    tidskodeSek: kommentarTid,
+    tekst: tekst || '[ikke transkribert]',
+    transkribert: !!tekst,
+    lydBlobRef: lydRef,
+    opprettet: Date.now()
+  };
+  prosjekt.kommentarer.push(kommentar);
+  prosjekt.kommentarer.sort((a, b) => a.tidskodeSek - b.tidskodeSek);
+  await lagreProsjekt();
 
-// Varsler tydelig hvis den valgte filen er for kort til å gi mediesesjon
+  pip(PIP.lagret);
+  $('liveTekst').textContent = formatTid(kommentarTid) + '  ' + kommentar.tekst;
+  settTilstand('LAGRET');
+  logg('Lagret kommentar: «' + kommentar.tekst + '»', 'ok');
+}
+
+async function slettSisteKommentar() {
+  if (!prosjekt || !prosjekt.kommentarer.length) return false;
+  // Nyeste etter opprettelsestidspunkt, ikke etter tidskode
+  let nyest = prosjekt.kommentarer[0];
+  for (const k of prosjekt.kommentarer) if (k.opprettet > nyest.opprettet) nyest = k;
+  prosjekt.kommentarer = prosjekt.kommentarer.filter(k => k.id !== nyest.id);
+  if (nyest.lydBlobRef) await dbSlett('lydklipp', nyest.lydBlobRef).catch(() => {});
+  await lagreProsjekt();
+  logg('Angret: slettet «' + nyest.tekst + '»', 'info');
+  return true;
+}
+
+function spol(delta) {
+  if (!lydErValgt()) return;
+  const maks = isFinite(spiller.duration) ? spiller.duration : Infinity;
+  spiller.currentTime = Math.max(0, Math.min(maks, spiller.currentTime + delta));
+  if (tilstand === 'LYTTER' || tilstand === 'LAGRET') kommentarTid = spiller.currentTime;
+  oppdaterPosisjon();
+  logg('Spolte ' + (delta > 0 ? '+' : '') + delta + ' s → ' + formatTid(spiller.currentTime), 'info');
+}
+
+/* ---------- Lydelementets egne hendelser ---------- */
+
+spiller.addEventListener('play', () => {
+  // Android gir Chrome lydfokus tilbake etter diktering og starter av seg selv.
+  // Under kommentarmodus må det blokkeres, ellers spilles opplesningen inn i
+  // mikrofonen og forurenser transkripsjonen.
+  if (holdPause) {
+    spiller.pause();
+    logg('Blokkerte automatisk gjenopptak', 'media');
+    return;
+  }
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+  oppdaterAnker();
+  beOmWakeLock();
+});
+
+spiller.addEventListener('pause', () => {
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+  oppdaterAnker();
+});
+
+spiller.addEventListener('timeupdate', () => {
+  if (visningNa === 'kjoremodus' && tilstand === 'SPILLER') {
+    $('stortTid').textContent = formatTid(spiller.currentTime);
+  }
+  if (prosjekt && Math.abs(spiller.currentTime - prosjekt.sistPosisjonSek) > 3) {
+    prosjekt.sistPosisjonSek = spiller.currentTime;
+    lagreProsjekt();
+  }
+});
+
+let sistPosisjonSendt = 0;
+spiller.addEventListener('timeupdate', () => {
+  if (Date.now() - sistPosisjonSendt > 2000) {
+    sistPosisjonSendt = Date.now();
+    oppdaterPosisjon();
+  }
+});
+
 spiller.addEventListener('loadedmetadata', () => {
+  oppdaterPosisjon();
   if (isFinite(spiller.duration) && spiller.duration < 5) {
-    logg('ADVARSEL: lydfilen er bare ' + Math.round(spiller.duration) +
-      ' s. Chrome lager ikke mediesesjon for filer under 5 sekunder.', 'feil');
+    logg('ADVARSEL: lydfilen er under 5 sekunder – Android lager da ingen mediesesjon, og rattknappene virker ikke.', 'feil');
   }
-  visSesjonStatus();
 });
 
-// Fanger opp tastetrykk – noen oppsett sender knapper som tastaturhendelser
-// i stedet for mediekommandoer, og da vil vi vite om det.
-window.addEventListener('keydown', e => {
-  logg('TASTETRYKK: key=' + e.key + ' code=' + e.code + ' keyCode=' + e.keyCode, 'media');
+spiller.addEventListener('ended', () => {
+  logg('Lydfilen er ferdig', 'info');
+  if (tilstand === 'SPILLER') settTilstand('LAGRET');
 });
 
-/* ---------- Diktering (Web Speech API) ---------- */
+spiller.addEventListener('error', () => {
+  const e = spiller.error;
+  logg('Lydfeil (kode ' + (e ? e.code : '?') + ')', 'feil');
+});
+
+/* ═══════════════ Talegjenkjenning ═══════════════ */
 
 let gjenkjenning = null;
-let dikteringAktiv = false;   // ønsket tilstand – styrer automatisk omstart
-let omstarter = 0;
-let omstartTimer = null;      // ventende automatisk omstart
-let ferdigTekst = '';         // tekst fra tidligere gjenkjenningsøkter
-let sesjonTekst = '';         // endelig tekst i pågående økt
+let dikteringAktiv = false;
+let omstartTimer = null;
+let sesjonTekst = '';           // endelig tekst i pågående gjenkjenningsøkt
+let samletTekst = '';           // tekst fra avsluttede økter i samme kommentar
+let kumulativModus = false;
+let gjenkjenningFeilet = false;
 
-// Til sammenlikning av resultater: små bokstaver, enkel mellomrom
 const norm = s => s.trim().toLowerCase().replace(/\s+/g, ' ');
 
-// Settes når vi har sett at plattformen sender kumulative resultater
-let kumulativModus = false;
-
-// Chrome på Android sender HELE ytringen på nytt som «endelig» resultat for
-// hver oppdatering (kumulativt), mens desktop sender adskilte segmenter.
-// Google reviderer dessuten tidligere ord underveis, så et nytt kumulativt
-// resultat er ikke alltid et rent prefiks-tillegg («OK en liten test» kan bli
-// «Jeg er en liten test»). Vi oppdager kumulativ oppførsel via prefiks-
-// tilfellene, og bruker deretter «lengste vinner» for hele økten.
+// Chrome på Android sender HELE ytringen på nytt for hver oppdatering, mens
+// desktop sender adskilte segmenter. Google reviderer dessuten tidligere ord,
+// så et nytt kumulativt resultat er ikke alltid et rent prefiks-tillegg.
+// Vi oppdager kumulativ oppførsel via prefikstilfellene, og bruker deretter
+// «lengste vinner» for resten av økten.
 function leggTilFinal(t) {
   const ny = t.trim();
   if (!ny) return;
   if (!sesjonTekst) { sesjonTekst = ny; return; }
-
   const a = norm(sesjonTekst), b = norm(ny);
   if (b.startsWith(a) || a.startsWith(b)) {
-    kumulativModus = true;                      // bekreftet kumulativ plattform
+    kumulativModus = true;
     if (b.length > a.length) sesjonTekst = ny;
   } else if (kumulativModus) {
-    // Revidert utgave av samme ytring – behold den mest fullstendige
     if (b.length > a.length) sesjonTekst = ny;
   } else {
-    sesjonTekst = sesjonTekst + ' ' + ny;       // ekte nytt segment (desktop)
+    sesjonTekst = sesjonTekst + ' ' + ny;
   }
 }
 
-// Lukker pågående økt: flytter øktteksten over i den varige teksten
-function avsluttSesjonTekst() {
-  if (!sesjonTekst) return;
-  logg('Tolket i denne økten: «' + sesjonTekst + '»', 'ok');
-  ferdigTekst = (ferdigTekst + ' ' + sesjonTekst).trim();
-  sesjonTekst = '';
-}
-
-function visTolketTekst(interim) {
-  const el = $('tolketTekst');
-  el.textContent = (ferdigTekst + ' ' + sesjonTekst).trim();
-  if (interim) {
-    const i = document.createElement('span');
-    i.className = 'interim';
-    i.textContent = (el.textContent ? ' ' : '') + interim;
-    el.append(i);
-  }
+function samletNa() {
+  return (samletTekst + ' ' + sesjonTekst).trim();
 }
 
 const FEILFORKLARING = {
   'no-speech': 'Ingen tale oppdaget',
   'audio-capture': 'Fikk ikke tak i mikrofonen',
-  'not-allowed': 'Mikrofontilgang avslått – gi tillatelse i Chrome',
-  'service-not-allowed': 'Talegjenkjenningstjenesten er blokkert',
-  'network': 'Nettverksfeil – talegjenkjenning krever nettilgang',
-  'aborted': 'Gjenkjenning avbrutt',
-  'language-not-supported': 'Språket nb-NO støttes ikke',
-  'bad-grammar': 'Grammatikkfeil i API-et'
+  'not-allowed': 'Mikrofontilgang avslått',
+  'service-not-allowed': 'Talegjenkjenning blokkert',
+  'network': 'Nettverksfeil – talegjenkjenning krever nett',
+  'aborted': 'Avbrutt',
+  'language-not-supported': 'Språket støttes ikke'
 };
-
-function visDikterFeil(tekst) {
-  $('dikterFeil').textContent = tekst;
-  if (tekst) logg('DIKTERING FEIL: ' + tekst, 'feil');
-}
 
 function startGjenkjenning() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) {
-    visDikterFeil('Web Speech API er ikke tilgjengelig i denne nettleseren.');
-    dikteringAktiv = false;
+    logg('Web Speech API mangler – kommentaren lagres uten tekst', 'feil');
+    gjenkjenningFeilet = true;
     return;
   }
+  dikteringAktiv = true;
+  sesjonTekst = '';
+  samletTekst = '';
+  gjenkjenningFeilet = false;
+  lagOgStart(SR);
+}
+
+function lagOgStart(SR) {
   gjenkjenning = new SR();
-  gjenkjenning.lang = 'nb-NO';
+  gjenkjenning.lang = innst.sprak;
   gjenkjenning.continuous = true;
   gjenkjenning.interimResults = true;
 
   gjenkjenning.onstart = () => {
-    // Brukeren kan ha rukket å trykke stopp mens økten startet opp
     if (!dikteringAktiv) { try { gjenkjenning.stop(); } catch (e) {} return; }
-    $('dikterStatus').textContent = '🔴 LYTTER' + (omstarter ? ' (omstart nr. ' + omstarter + ')' : '');
-    logg('Diktering startet' + (omstarter ? ' (omstart nr. ' + omstarter + ')' : ''), 'ok');
   };
 
   gjenkjenning.onresult = e => {
     let interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const r = e.results[i];
-      if (r.isFinal) {
-        // Rå tekst slik den kom fra API-et, FØR dedup – nyttig for feilsøking
-        // hvis Android igjen sender kumulative/reviderte gjentakelser.
-        logg('Diktert (rå): «' + r[0].transcript.trim() + '» (sikkerhet ' +
-          Math.round((r[0].confidence || 0) * 100) + ' %)', 'ok');
-        leggTilFinal(r[0].transcript);
-      } else {
-        interim += r[0].transcript;
-      }
+      if (r.isFinal) leggTilFinal(r[0].transcript);
+      else interim += r[0].transcript;
     }
-    visTolketTekst(interim);
+    const vist = (samletNa() + ' ' + interim).trim();
+    $('liveTekst').textContent = vist;
   };
 
   gjenkjenning.onerror = e => {
-    visDikterFeil((FEILFORKLARING[e.error] || 'Ukjent feil') + ' (' + e.error + ')');
-    // Ved avslått tilgang er det meningsløst å starte på nytt
-    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') dikteringAktiv = false;
+    const forklaring = FEILFORKLARING[e.error] || e.error;
+    // «no-speech» og «aborted» er normale ved korte pauser, ikke ekte feil
+    if (e.error !== 'no-speech' && e.error !== 'aborted') {
+      gjenkjenningFeilet = true;
+      logg('Dikteringsfeil: ' + forklaring, 'feil');
+    }
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      dikteringAktiv = false;
+      pip(PIP.feil);
+    }
   };
 
-  // Chrome stopper gjenkjenningen etter en tid/stillhet – start på nytt så
-  // lenge testen er aktiv. Dette speiler oppførselen fase 2 trenger.
+  // Chrome på Android stopper gjenkjenningen hele tiden (kjent Chromium-feil).
+  // Start på nytt så lenge vi fortsatt lytter.
   gjenkjenning.onend = () => {
-    avsluttSesjonTekst();
-    visTolketTekst('');
-    logg('Gjenkjenning stoppet av nettleseren', 'info');
+    if (sesjonTekst) {
+      samletTekst = (samletTekst + ' ' + sesjonTekst).trim();
+      sesjonTekst = '';
+    }
     if (dikteringAktiv) {
-      omstarter++;
-      omstartTimer = setTimeout(() => { if (dikteringAktiv) startGjenkjenning(); }, 250);
-    } else {
-      $('dikterStatus').textContent = 'Ikke aktiv';
+      omstartTimer = setTimeout(() => {
+        if (dikteringAktiv) lagOgStart(SR);
+      }, 250);
     }
   };
 
   try {
     gjenkjenning.start();
   } catch (e) {
-    visDikterFeil('Kunne ikke starte: ' + e.message);
-    dikteringAktiv = false;
+    logg('Kunne ikke starte diktering: ' + e.message, 'feil');
+    gjenkjenningFeilet = true;
   }
 }
 
-$('knappDikter').onclick = () => {
-  if (!dikteringAktiv) {
-    dikteringAktiv = true;
-    holdPause = true;
-    omstarter = 0;
-    ferdigTekst = '';
-    sesjonTekst = '';
-    visDikterFeil('');
-    $('tolketTekst').textContent = '';
-    $('knappDikter').textContent = '⏹ Stopp diktering';
-    $('knappDikter').classList.add('aktiv');
-    startGjenkjenning();
-  } else {
-    dikteringAktiv = false;
-    holdPause = false;
-    clearTimeout(omstartTimer);   // stopp ventende omstart
-    if (gjenkjenning) { try { gjenkjenning.stop(); } catch (e) {} }
-    $('knappDikter').textContent = '🎙 Start diktering';
-    $('knappDikter').classList.remove('aktiv');
-    logg('Diktering stoppet av bruker', 'info');
+// Stopper gjenkjenningen og returnerer all tekst som ble oppfattet
+function stoppGjenkjenning() {
+  dikteringAktiv = false;
+  clearTimeout(omstartTimer);
+  if (gjenkjenning) {
+    try { gjenkjenning.stop(); } catch (e) { /* allerede stoppet */ }
   }
-};
+  const alt = samletNa();
+  samletTekst = '';
+  sesjonTekst = '';
+  kumulativModus = false;
+  return alt;
+}
 
-/* ---------- Mikrofon-info ---------- */
+/* ═══════════════ Sikkerhetskopi-opptak ═══════════════ */
 
-$('knappMic').onclick = async () => {
-  const ut = $('micInfo');
-  ut.textContent = 'Sjekker …';
+let opptaker = null;
+let opptakBiter = [];
+let opptakStroem = null;
+
+async function startOpptak() {
+  if (!innst.backup) return;
+  if (!window.MediaRecorder || !navigator.mediaDevices) return;
   try {
-    // Må be om tilgang først – ellers er enhetsnavnene tomme
-    const strøm = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const spor = strøm.getAudioTracks()[0];
-    const innst = spor.getSettings ? spor.getSettings() : {};
-    let html = '<strong>Aktiv inngang:</strong> ' + (spor.label || 'ukjent') + '<br>';
-    if (innst.sampleRate) html += 'Samplerate: ' + innst.sampleRate + ' Hz<br>';
-    if (typeof innst.echoCancellation === 'boolean') html += 'Ekkokansellering: ' + (innst.echoCancellation ? 'på' : 'av') + '<br>';
-
-    const enheter = await navigator.mediaDevices.enumerateDevices();
-    const innganger = enheter.filter(d => d.kind === 'audioinput');
-    html += '<br><strong>Alle lydinnganger (' + innganger.length + '):</strong><br>';
-    for (const d of innganger) {
-      const aktiv = innst.deviceId && d.deviceId === innst.deviceId;
-      html += (aktiv ? '▶ ' : '· ') + (d.label || '(uten navn)') + '<br>';
-    }
-    ut.innerHTML = html;
-    logg('Mikrofon OK: ' + (spor.label || 'ukjent'), 'ok');
-    // Slipp mikrofonen igjen – diktering håndterer sin egen tilgang
-    strøm.getTracks().forEach(t => t.stop());
-  } catch (err) {
-    ut.innerHTML = '<span style="color:var(--feil)">Fikk ikke tilgang: ' + err.name + ' – ' + err.message + '</span>';
-    logg('Mikrofonfeil: ' + err.name, 'feil');
+    opptakStroem = await navigator.mediaDevices.getUserMedia({ audio: true });
+    opptakBiter = [];
+    opptaker = new MediaRecorder(opptakStroem);
+    opptaker.ondataavailable = e => { if (e.data.size) opptakBiter.push(e.data); };
+    opptaker.start();
+  } catch (e) {
+    // Dikteringen er viktigst – opptak som feiler skal aldri stoppe den
+    logg('Sikkerhetsopptak startet ikke: ' + e.message, 'feil');
+    opptaker = null;
+    frigiStroem();
   }
-};
+}
 
-/* ---------- Wake Lock og synlighet ---------- */
+function frigiStroem() {
+  if (opptakStroem) {
+    opptakStroem.getTracks().forEach(t => t.stop());
+    opptakStroem = null;
+  }
+}
+
+function stoppOpptak() {
+  return new Promise(res => {
+    if (!opptaker || opptaker.state === 'inactive') { frigiStroem(); return res(null); }
+    opptaker.onstop = () => {
+      const blob = opptakBiter.length ? new Blob(opptakBiter, { type: opptaker.mimeType }) : null;
+      opptaker = null;
+      frigiStroem();
+      res(blob);
+    };
+    try { opptaker.stop(); } catch (e) { frigiStroem(); res(null); }
+  });
+}
+
+/* ═══════════════ Wake Lock ═══════════════ */
 
 let wakeLock = null;
 
 async function beOmWakeLock() {
-  if (!('wakeLock' in navigator)) {
-    logg('Wake Lock API ikke tilgjengelig', 'feil');
-    return;
-  }
-  if (wakeLock) return;
+  if (!('wakeLock' in navigator) || wakeLock) return;
   try {
     wakeLock = await navigator.wakeLock.request('screen');
-    logg('Wake Lock aktiv – skjermen holdes på', 'ok');
-    wakeLock.addEventListener('release', () => {
-      logg('Wake Lock sluppet av systemet', 'info');
-      wakeLock = null;
-    });
-  } catch (err) {
-    logg('Wake Lock feilet: ' + err.message, 'feil');
+    wakeLock.addEventListener('release', () => { wakeLock = null; });
+  } catch (e) {
+    logg('Wake Lock feilet: ' + e.message, 'info');
   }
 }
 
-/* ---------- Lydenheter og kjenningstoner ---------- */
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    logg('Appen er i bakgrunnen', 'feil');
+  } else {
+    logg('Appen er synlig igjen', 'ok');
+    if (visningNa === 'kjoremodus') beOmWakeLock();
+  }
+});
 
-// Spiller alle kjenningstonene etter tur, så de kan læres før kjøring
-$('knappToner').onclick = async () => {
-  if (!$('pipPa').checked) {
-    logg('Kan ikke spille tonene – huk av «Pip ved hver mediekommando» først', 'feil');
+/* ═══════════════ Visninger ═══════════════ */
+
+let visningNa = 'forberedelse';
+
+function visVisning(navn) {
+  for (const v of ['forberedelse', 'kjoremodus', 'etterarbeid', 'innstillinger']) {
+    $(v).classList.toggle('aktiv', v === navn);
+  }
+  visningNa = navn;
+  oppdaterAnker();
+  if (navn === 'kjoremodus') beOmWakeLock();
+}
+
+/* ---------- Forberedelse ---------- */
+
+$('filVelger').addEventListener('change', async e => {
+  const fil = e.target.files[0];
+  if (!fil) return;
+  if (lydUrl) URL.revokeObjectURL(lydUrl);
+  lydUrl = URL.createObjectURL(fil);
+  spiller.src = lydUrl;
+  $('etterSpiller').src = lydUrl;
+
+  // Passer filen et eksisterende prosjekt, gjenbruk det – ellers lag nytt
+  const eksisterende = prosjekter.find(p => p.filnavn === fil.name);
+  if (eksisterende) {
+    prosjekt = eksisterende;
+    $('tittelFelt').value = prosjekt.tittel;
+    logg('Gjenåpnet prosjekt: ' + prosjekt.tittel, 'ok');
+    if (prosjekt.sistPosisjonSek > 0) {
+      spiller.addEventListener('loadedmetadata', function hopp() {
+        spiller.currentTime = prosjekt.sistPosisjonSek;
+        spiller.removeEventListener('loadedmetadata', hopp);
+        logg('Hoppet til lagret posisjon ' + formatTid(prosjekt.sistPosisjonSek), 'info');
+      });
+    }
+  } else {
+    await nyttProsjekt(fil.name, $('tittelFelt').value.trim() || fil.name);
+  }
+  settMetadata();
+  tegnProsjektListe();
+  visAktivtProsjekt();
+  oppdaterStartKnapp();
+});
+
+$('tittelFelt').addEventListener('change', async () => {
+  if (!prosjekt) return;
+  prosjekt.tittel = $('tittelFelt').value.trim() || prosjekt.filnavn;
+  await lagreProsjekt();
+  settMetadata();
+  tegnProsjektListe();
+  visAktivtProsjekt();
+});
+
+function oppdaterStartKnapp() {
+  $('knappStart').disabled = !(prosjekt && lydErValgt());
+}
+
+$('knappStart').onclick = () => {
+  vekkLyd();                       // lås opp lyd mens vi har et brukertrykk
+  spiller.playbackRate = innst.hastighet;
+  visVisning('kjoremodus');
+  settTilstand('KLAR');
+  $('stortTid').textContent = formatTid(spiller.currentTime);
+  logg('Kjøremodus startet', 'ok');
+};
+
+$('tilInnstillinger').onclick = () => { fyllInnstillinger(); visVisning('innstillinger'); };
+$('fraInnstillinger').onclick = () => visVisning('forberedelse');
+$('tilEtterarbeid').onclick = () => { tegnKommentarer(); visVisning('etterarbeid'); };
+$('fraEtterarbeid').onclick = () => { visAktivtProsjekt(); tegnProsjektListe(); visVisning('forberedelse'); };
+
+/* ---------- Kjøremodus ---------- */
+
+// Hele flaten er trykkflate – speiler rattknappen
+$('trykkflate').addEventListener('click', () => nesteSteg(spiller.currentTime));
+
+$('knappSpolTilbake').onclick = e => { e.stopPropagation(); spol(-innst.spolLengde); };
+$('knappSpolFram').onclick = e => { e.stopPropagation(); spol(innst.spolLengde); };
+
+$('knappAvslutt').onclick = async e => {
+  e.stopPropagation();
+  if (tilstand === 'LYTTER') await avsluttKommentar();
+  holdPause = false;
+  spiller.pause();
+  anker.pause();
+  if (wakeLock) { try { await wakeLock.release(); } catch (err) {} wakeLock = null; }
+  visVisning('forberedelse');
+  visAktivtProsjekt();
+  tegnProsjektListe();
+  logg('Kjøremodus avsluttet', 'ok');
+};
+
+// Stor tidsvisning også når lyden står stille
+setInterval(() => {
+  if (visningNa === 'kjoremodus' && tilstand !== 'SPILLER') {
+    $('stortTid').textContent = formatTid(tilstand === 'KLAR' ? spiller.currentTime : kommentarTid);
+  }
+}, 300);
+
+/* ═══════════════ Etterarbeid ═══════════════ */
+
+const etterSpiller = $('etterSpiller');
+
+function tegnKommentarer() {
+  const el = $('kommentarListe');
+  el.innerHTML = '';
+  if (!prosjekt || !prosjekt.kommentarer.length) {
+    el.innerHTML = '<div class="tom">Ingen kommentarer ennå.</div>';
+    oppdaterCsvForhaand();
     return;
   }
-  vekkLyd();
-  for (const navn of Object.keys(PIP)) {
-    logg('Kjenningstone: ' + navn, 'info');
-    pip(PIP[navn]);
-    await new Promise(r => setTimeout(r, 900));
+  for (const k of prosjekt.kommentarer) {
+    el.append(lagKommentarRad(k));
+  }
+  oppdaterCsvForhaand();
+}
+
+function lagKommentarRad(k) {
+  const boks = document.createElement('div');
+  boks.className = 'kommentar';
+
+  const topp = document.createElement('div');
+  topp.className = 'topplinje';
+  const tid = document.createElement('button');
+  tid.className = 'tidskode';
+  tid.textContent = tidskode(k.tidskodeSek, innst.csvFormat, innst.fps);
+  tid.onclick = () => {
+    if (!lydErValgt()) { alert('Velg lydfilen først for å kunne hoppe i lyden.'); return; }
+    etterSpiller.currentTime = k.tidskodeSek;
+    etterSpiller.play().catch(() => {});
+  };
+  topp.append(tid);
+  if (!k.transkribert) {
+    const merke = document.createElement('span');
+    merke.className = 'merke';
+    merke.textContent = '⚠ ikke transkribert';
+    topp.append(merke);
+  }
+
+  const tekst = document.createElement('div');
+  tekst.className = 'tekst';
+  tekst.textContent = k.tekst;
+
+  const verktoy = document.createElement('div');
+  verktoy.className = 'verktoy';
+
+  const rediger = document.createElement('button');
+  rediger.className = 'liten';
+  rediger.textContent = '✎ Rediger';
+  rediger.onclick = () => startRedigering(boks, tekst, verktoy, k);
+  verktoy.append(rediger);
+
+  if (k.lydBlobRef) {
+    const spillOpptak = document.createElement('button');
+    spillOpptak.className = 'liten';
+    spillOpptak.textContent = '▶ Opptak';
+    spillOpptak.onclick = async () => {
+      try {
+        const post = await dbLes('lydklipp', k.lydBlobRef);
+        if (!post || !post.blob) { alert('Opptaket finnes ikke lenger.'); return; }
+        const url = URL.createObjectURL(post.blob);
+        const lyd = new Audio(url);
+        lyd.onended = () => URL.revokeObjectURL(url);
+        lyd.play();
+      } catch (e) {
+        alert('Kunne ikke spille opptaket: ' + e.message);
+      }
+    };
+    verktoy.append(spillOpptak);
+  }
+
+  const slett = document.createElement('button');
+  slett.className = 'liten fare';
+  slett.textContent = '🗑 Slett';
+  slett.onclick = async () => {
+    if (!confirm('Slette denne kommentaren?')) return;
+    prosjekt.kommentarer = prosjekt.kommentarer.filter(x => x.id !== k.id);
+    if (k.lydBlobRef) await dbSlett('lydklipp', k.lydBlobRef).catch(() => {});
+    await lagreProsjekt();
+    tegnKommentarer();
+  };
+  verktoy.append(slett);
+
+  boks.append(topp, tekst, verktoy);
+  return boks;
+}
+
+function startRedigering(boks, tekstEl, verktoy, k) {
+  const felt = document.createElement('textarea');
+  felt.value = k.tekst;
+  felt.rows = 3;
+  tekstEl.replaceWith(felt);
+  verktoy.style.display = 'none';
+
+  const knapper = document.createElement('div');
+  knapper.className = 'verktoy';
+  knapper.style.marginTop = '8px';
+
+  const lagre = document.createElement('button');
+  lagre.className = 'liten primaer';
+  lagre.textContent = '✓ Lagre';
+  lagre.onclick = async () => {
+    k.tekst = felt.value.trim() || '[tom]';
+    k.transkribert = true;
+    await lagreProsjekt();
+    tegnKommentarer();
+  };
+
+  const avbryt = document.createElement('button');
+  avbryt.className = 'liten';
+  avbryt.textContent = 'Avbryt';
+  avbryt.onclick = () => tegnKommentarer();
+
+  knapper.append(lagre, avbryt);
+  boks.append(knapper);
+  felt.focus();
+}
+
+/* ---------- CSV ---------- */
+
+function csvFelt(verdi) {
+  // Anførselstegn dobles, hele feltet siteres
+  return '"' + String(verdi).replace(/"/g, '""') + '"';
+}
+
+function byggCsv() {
+  const linjer = ['Timecode,Comment'];
+  if (prosjekt) {
+    for (const k of prosjekt.kommentarer) {
+      linjer.push(csvFelt(tidskode(k.tidskodeSek, innst.csvFormat, innst.fps)) + ',' + csvFelt(k.tekst));
+    }
+  }
+  return linjer.join('\r\n');
+}
+
+function oppdaterCsvForhaand() {
+  const el = $('csvForhaand');
+  if (!prosjekt || !prosjekt.kommentarer.length) {
+    el.textContent = 'Ingen kommentarer å vise.';
+    return;
+  }
+  el.textContent = byggCsv();
+}
+
+function csvFilnavn() {
+  const grunn = (prosjekt ? prosjekt.tittel : 'medhor').replace(/[^\wæøåÆØÅ\- ]/g, '').trim();
+  return (grunn || 'medhor') + '.csv';
+}
+
+function csvBlob() {
+  // UTF-8 med BOM, så Excel og Frame.io leser norske tegn riktig
+  return new Blob(['﻿' + byggCsv()], { type: 'text/csv;charset=utf-8' });
+}
+
+$('csvFormat').addEventListener('change', () => {
+  innst.csvFormat = $('csvFormat').value;
+  lagreInnstillinger();
+  tegnKommentarer();
+});
+
+$('knappLastCsv').onclick = () => {
+  if (!prosjekt || !prosjekt.kommentarer.length) { alert('Ingen kommentarer å eksportere.'); return; }
+  const url = URL.createObjectURL(csvBlob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = csvFilnavn();
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  logg('CSV lastet ned', 'ok');
+};
+
+$('knappDelCsv').onclick = async () => {
+  if (!prosjekt || !prosjekt.kommentarer.length) { alert('Ingen kommentarer å eksportere.'); return; }
+  const fil = new File([csvBlob()], csvFilnavn(), { type: 'text/csv' });
+  if (navigator.canShare && navigator.canShare({ files: [fil] })) {
+    try {
+      await navigator.share({ files: [fil], title: prosjekt.tittel });
+      logg('CSV delt', 'ok');
+    } catch (e) {
+      if (e.name !== 'AbortError') logg('Deling feilet: ' + e.message, 'feil');
+    }
+  } else {
+    alert('Deling av filer støttes ikke her – bruk «Last ned CSV» i stedet.');
   }
 };
 
-// Bluetooth som kobles fra eller til dukker opp her. Det er nettopp slike
-// hendelser Android selv oversetter til pause/play, så de må kunne skilles
-// fra ekte knappetrykk i loggen.
-if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
-  navigator.mediaDevices.addEventListener('devicechange', async () => {
-    let navn = '';
-    try {
-      const enheter = await navigator.mediaDevices.enumerateDevices();
-      navn = ' (' + enheter.filter(d => d.kind === 'audiooutput').length + ' lydutganger)';
-    } catch (e) { /* uten mikrofontillatelse er navnene skjult – ufarlig */ }
-    logg('LYDENHET ENDRET – noe ble koblet til eller fra' + navn, 'media');
-  });
+/* ═══════════════ Innstillingsskjema ═══════════════ */
+
+function fyllInnstillinger() {
+  const velger = $('innKnappeoppsett');
+  velger.innerHTML = '';
+  for (const [nokkel, o] of Object.entries(OPPSETT)) {
+    const opt = document.createElement('option');
+    opt.value = nokkel;
+    opt.textContent = o.navn;
+    velger.append(opt);
+  }
+  velger.value = innst.knappeoppsett;
+  $('oppsettForklaring').textContent = (OPPSETT[innst.knappeoppsett] || OPPSETT.standard).forklaring;
+
+  $('innDobbelVindu').value = innst.dobbelVindu;
+  $('visDobbelVindu').textContent = innst.dobbelVindu;
+  $('innSpolLengde').value = innst.spolLengde;
+  $('innHastighet').value = innst.hastighet;
+  $('innPip').checked = innst.pip;
+  $('innBackup').checked = innst.backup;
+  $('innSprak').value = innst.sprak;
+  $('innFps').value = innst.fps;
+  $('innDiagnose').checked = innst.diagnose;
+  $('diagnosePanel').style.display = innst.diagnose ? 'block' : 'none';
+  $('csvFormat').value = innst.csvFormat;
+  oppdaterSpolVisning();
 }
 
-// Logger når Chrome legger fanen i bakgrunnen – viktig for feilsøking i bil.
-// Wake Lock må dessuten bes om på nytt når fanen blir synlig igjen.
-document.addEventListener('visibilitychange', () => {
-  logg('Fanen er nå ' + (document.hidden ? 'I BAKGRUNNEN' : 'synlig'), document.hidden ? 'feil' : 'ok');
-  if (!document.hidden && !spiller.paused) beOmWakeLock();
+function oppdaterSpolVisning() {
+  document.querySelectorAll('.spolTall').forEach(el => el.textContent = innst.spolLengde);
+}
+
+$('innKnappeoppsett').addEventListener('change', () => {
+  innst.knappeoppsett = $('innKnappeoppsett').value;
+  $('oppsettForklaring').textContent = (OPPSETT[innst.knappeoppsett] || OPPSETT.standard).forklaring;
+  lagreInnstillinger();
+  logg('Knappeoppsett: ' + innst.knappeoppsett, 'ok');
 });
 
-/* ---------- Oppstart ---------- */
+$('innDobbelVindu').addEventListener('input', () => {
+  innst.dobbelVindu = Number($('innDobbelVindu').value);
+  $('visDobbelVindu').textContent = innst.dobbelVindu;
+  lagreInnstillinger();
+});
 
-logg('Testside ' + VERSJON + ' lastet. Gå gjennom forhåndssjekken før du tester knappene.', 'info');
-// Chrome nekter som regel mikrofontilgang (og dermed diktering) for sider
-// åpnet direkte fra fil – selv om Chrome ellers har mikrofontillatelse.
-if (location.protocol === 'file:') {
-  logg('ADVARSEL: Siden er åpnet via file:// – Chrome blokkerer da ofte mikrofon og diktering. Kjør en lokal server, f.eks. «python -m http.server 8000», og åpne http://localhost:8000/fase1-test.html', 'feil');
-}
-registrerMediaSession();
-oppdaterTilstand();
-loggStrategier('oppstart');
-visSesjonStatus();
-// Sesjonsstatusen endrer seg med avspillingen, så den holdes oppdatert jevnlig
-setInterval(visSesjonStatus, 2000);
+$('innSpolLengde').addEventListener('change', () => {
+  innst.spolLengde = Number($('innSpolLengde').value);
+  oppdaterSpolVisning();
+  lagreInnstillinger();
+});
+
+$('innHastighet').addEventListener('change', () => {
+  innst.hastighet = Number($('innHastighet').value);
+  spiller.playbackRate = innst.hastighet;
+  lagreInnstillinger();
+});
+
+$('innPip').addEventListener('change', () => { innst.pip = $('innPip').checked; lagreInnstillinger(); });
+$('innBackup').addEventListener('change', () => { innst.backup = $('innBackup').checked; lagreInnstillinger(); });
+$('innSprak').addEventListener('change', () => { innst.sprak = $('innSprak').value; lagreInnstillinger(); });
+$('innFps').addEventListener('change', () => {
+  innst.fps = Number($('innFps').value);
+  lagreInnstillinger();
+  tegnKommentarer();
+});
+$('innDiagnose').addEventListener('change', () => {
+  innst.diagnose = $('innDiagnose').checked;
+  $('diagnosePanel').style.display = innst.diagnose ? 'block' : 'none';
+  lagreInnstillinger();
+});
+
+/* ═══════════════ Oppstart ═══════════════ */
+
+(async function start() {
+  lastInnstillinger();
+  oppdaterSpolVisning();
+  $('csvFormat').value = innst.csvFormat;
+  logg('Medhør ' + VERSJON + ' startet', 'ok');
+
+  if (location.protocol === 'file:') {
+    logg('ADVARSEL: åpnet via file:// – Chrome blokkerer da mikrofonen. Bruk https eller localhost.', 'feil');
+  }
+
+  try {
+    db = await aapneDb();
+    await lastProsjekter();
+    logg('Database klar – ' + prosjekter.length + ' prosjekter', 'ok');
+  } catch (e) {
+    logg('Databasen kunne ikke åpnes: ' + e.message, 'feil');
+  }
+
+  registrerMediaSession();
+  visAktivtProsjekt();
+  oppdaterStartKnapp();
+})();
 </script>
 </body>
 </html>
