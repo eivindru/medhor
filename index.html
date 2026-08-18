@@ -415,7 +415,43 @@ function registrerMediaSession() {
 let gjenkjenning = null;
 let dikteringAktiv = false;   // ønsket tilstand – styrer automatisk omstart
 let omstarter = 0;
-let ferdigTekst = '';
+let ferdigTekst = '';         // tekst fra tidligere gjenkjenningsøkter
+let sesjonTekst = '';         // endelig tekst i pågående økt
+
+// Til sammenlikning av resultater: små bokstaver, enkel mellomrom
+const norm = s => s.trim().toLowerCase().replace(/\s+/g, ' ');
+
+// Chrome på Android sender ofte HELE ytringen på nytt som «endelig» resultat
+// for hver oppdatering (kumulativt), mens desktop sender adskilte segmenter.
+// Er ny og gammel tekst prefiks av hverandre, beholder vi bare den lengste;
+// ellers er det et ekte nytt segment som legges til.
+function leggTilFinal(t) {
+  const a = norm(sesjonTekst), b = norm(t);
+  if (a && (b.startsWith(a) || a.startsWith(b))) {
+    if (b.length > a.length) sesjonTekst = t.trim();
+  } else {
+    sesjonTekst = (sesjonTekst + ' ' + t.trim()).trim();
+  }
+}
+
+// Lukker pågående økt: flytter øktteksten over i den varige teksten
+function avsluttSesjonTekst() {
+  if (!sesjonTekst) return;
+  logg('Tolket i denne økten: «' + sesjonTekst + '»', 'ok');
+  ferdigTekst = (ferdigTekst + ' ' + sesjonTekst).trim();
+  sesjonTekst = '';
+}
+
+function visTolketTekst(interim) {
+  const el = $('tolketTekst');
+  el.textContent = (ferdigTekst + ' ' + sesjonTekst).trim();
+  if (interim) {
+    const i = document.createElement('span');
+    i.className = 'interim';
+    i.textContent = (el.textContent ? ' ' : '') + interim;
+    el.append(i);
+  }
+}
 
 const FEILFORKLARING = {
   'no-speech': 'Ingen tale oppdaget',
@@ -454,21 +490,10 @@ function startGjenkjenning() {
     let interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const r = e.results[i];
-      if (r.isFinal) {
-        ferdigTekst += r[0].transcript + ' ';
-        logg('Tolket: «' + r[0].transcript.trim() + '» (sikkerhet ' + Math.round(r[0].confidence * 100) + ' %)', 'ok');
-      } else {
-        interim += r[0].transcript;
-      }
+      if (r.isFinal) leggTilFinal(r[0].transcript);
+      else interim += r[0].transcript;
     }
-    $('tolketTekst').innerHTML = '';
-    $('tolketTekst').append(ferdigTekst);
-    if (interim) {
-      const i = document.createElement('span');
-      i.className = 'interim';
-      i.textContent = interim;
-      $('tolketTekst').append(i);
-    }
+    visTolketTekst(interim);
   };
 
   gjenkjenning.onerror = e => {
@@ -480,6 +505,8 @@ function startGjenkjenning() {
   // Chrome stopper gjenkjenningen etter en tid/stillhet – start på nytt så
   // lenge testen er aktiv. Dette speiler oppførselen fase 2 trenger.
   gjenkjenning.onend = () => {
+    avsluttSesjonTekst();
+    visTolketTekst('');
     logg('Gjenkjenning stoppet av nettleseren', 'info');
     if (dikteringAktiv) {
       omstarter++;
@@ -502,6 +529,7 @@ $('knappDikter').onclick = () => {
     dikteringAktiv = true;
     omstarter = 0;
     ferdigTekst = '';
+    sesjonTekst = '';
     visDikterFeil('');
     $('tolketTekst').textContent = '';
     $('knappDikter').textContent = '⏹ Stopp diktering';
