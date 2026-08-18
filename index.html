@@ -346,9 +346,16 @@
       <input type="checkbox" id="innPip">
       <label for="innPip">Lydsignaler (pip) ved start og stopp av lytting</label>
     </div>
-    <div class="rad felt">
-      <input type="checkbox" id="innBackup">
-      <label for="innBackup">Ta alltid opp lyd av kommentaren som sikkerhetskopi</label>
+    <div class="felt">
+      <label for="innBackupModus">Lydopptak av kommentarer (sikkerhetskopi)</label>
+      <select id="innBackupModus">
+        <option value="vedBehov">Ved behov – kun når dikteringen svikter (anbefalt)</option>
+        <option value="alltid">Alltid – slår av diktering, kun opptak</option>
+        <option value="av">Av – aldri opptak</option>
+      </select>
+      <p class="hjelp">Telefonen gir bare én mottaker mikrofonlyd om gangen, så samtidig
+        diktering og opptak er ikke mulig. Med «Ved behov» eier dikteringen mikrofonen,
+        og opptaket rykker inn for resten av kommentaren hvis den svikter.</p>
     </div>
     <div class="felt">
       <label for="innSprak">Språk for talegjenkjenning</label>
@@ -383,7 +390,10 @@
       <div class="rad" style="margin-top:8px">
         <button class="liten" id="kopierLogg">📋 Kopier logg</button>
         <button class="liten" id="tomLogg">Tøm logg</button>
+        <button class="liten" id="knappMicTest">🧪 Test mikrofondeling</button>
       </div>
+      <p class="hjelp">Mikrofontesten sjekker om diktering og opptak kan dele mikrofonen
+        på denne telefonen. Snakk sammenhengende i ca. 15 sekunder mens den kjører.</p>
     </div>
   </section>
 </div>
@@ -395,7 +405,7 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v1.0';
+const VERSJON = 'v1.1';
 
 const $ = id => document.getElementById(id);
 $('versjon').textContent = VERSJON;
@@ -482,7 +492,7 @@ const STANDARD = {
   fps: 25,
   csvFormat: 'HHMMSSFF',
   pip: true,
-  backup: true,
+  backupModus: 'vedBehov',   // vedBehov | alltid | av
   sprak: 'nb-NO',
   diagnose: false
 };
@@ -492,6 +502,11 @@ let innst = Object.assign({}, STANDARD);
 function lastInnstillinger() {
   try {
     const lagret = JSON.parse(localStorage.getItem('medhor-innstillinger') || '{}');
+    // Overgang fra v1.0, der backup var av/på i stedet for tre moduser
+    if (!lagret.backupModus && typeof lagret.backup === 'boolean') {
+      lagret.backupModus = lagret.backup ? 'vedBehov' : 'av';
+      delete lagret.backup;
+    }
     innst = Object.assign({}, STANDARD, lagret);
   } catch (e) {
     logg('Kunne ikke lese innstillinger, bruker standard', 'feil');
@@ -978,8 +993,18 @@ function startKommentar(frossenTid) {
   settTilstand('LYTTER');
   pip(PIP.lytter);
   $('liveTekst').textContent = '';
-  startGjenkjenning();
-  startOpptak();
+  fallbackStartet = false;
+  gjenkjenningFeilet = false;
+  // Diktering og opptak kan IKKE dele mikrofonen på Android – bare én mottaker
+  // får lyd, den andre får stillhet. Derfor: enten diktering (med opptak som
+  // reserve ved svikt) eller rent opptak, aldri begge samtidig.
+  if (innst.backupModus === 'alltid') {
+    logg('Backupmodus «alltid»: kun opptak, ingen diktering', 'info');
+    $('liveTekst').textContent = '🎙 Tar opp lyd (diktering er slått av)';
+    startOpptak('alltid-modus');
+  } else {
+    startGjenkjenning();
+  }
   logg('Kommentar startet ved ' + formatTid(kommentarTid), 'ok');
 }
 
@@ -1157,17 +1182,44 @@ const FEILFORKLARING = {
   'language-not-supported': 'Språket støttes ikke'
 };
 
-function startGjenkjenning() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) {
-    logg('Web Speech API mangler – kommentaren lagres uten tekst', 'feil');
-    gjenkjenningFeilet = true;
-    return;
+// Feil som betyr at dikteringen ikke kommer til å levere mer tekst – i motsetning
+// til «no-speech»/«aborted», som er normale ved korte pauser i talen.
+const ALVORLIGE_FEIL = ['network', 'not-allowed', 'service-not-allowed',
+                        'audio-capture', 'language-not-supported'];
+
+let fallbackStartet = false;
+let omstarter = 0;
+
+// Kalles når dikteringen ikke kan levere: stopp den helt (den ville ellers
+// konkurrert med opptaket om mikrofonen) og la opptaket ta resten av kommentaren.
+function dikteringSviktet(aarsak) {
+  gjenkjenningFeilet = true;
+  if (fallbackStartet) return;
+  fallbackStartet = true;
+  dikteringAktiv = false;
+  clearTimeout(omstartTimer);
+  if (gjenkjenning) { try { gjenkjenning.stop(); } catch (e) { /* alt stoppet */ } }
+  pip(PIP.feil);
+  if (tilstand === 'LYTTER' && innst.backupModus !== 'av') {
+    logg('Diktering sviktet (' + aarsak + ') – opptak overtar resten av kommentaren', 'feil');
+    $('liveTekst').textContent = '🎙 Diktering utilgjengelig – tar opp lyd i stedet. ' + samletNa();
+    startOpptak('reserve etter dikteringssvikt');
+  } else {
+    logg('Diktering sviktet (' + aarsak + ')', 'feil');
   }
+}
+
+function startGjenkjenning() {
   dikteringAktiv = true;
   sesjonTekst = '';
   samletTekst = '';
   gjenkjenningFeilet = false;
+  omstarter = 0;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    dikteringSviktet('Web Speech API mangler');
+    return;
+  }
   lagOgStart(SR);
 }
 
@@ -1179,14 +1231,20 @@ function lagOgStart(SR) {
 
   gjenkjenning.onstart = () => {
     if (!dikteringAktiv) { try { gjenkjenning.stop(); } catch (e) {} return; }
+    logg('Diktering lytter' + (omstarter ? ' (omstart nr. ' + omstarter + ')' : ''), 'ok');
   };
 
   gjenkjenning.onresult = e => {
     let interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const r = e.results[i];
-      if (r.isFinal) leggTilFinal(r[0].transcript);
-      else interim += r[0].transcript;
+      if (r.isFinal) {
+        logg('Diktert (rå): «' + r[0].transcript.trim() + '» (' +
+          Math.round((r[0].confidence || 0) * 100) + ' %)', 'ok');
+        leggTilFinal(r[0].transcript);
+      } else {
+        interim += r[0].transcript;
+      }
     }
     const vist = (samletNa() + ' ' + interim).trim();
     $('liveTekst').textContent = vist;
@@ -1194,14 +1252,10 @@ function lagOgStart(SR) {
 
   gjenkjenning.onerror = e => {
     const forklaring = FEILFORKLARING[e.error] || e.error;
-    // «no-speech» og «aborted» er normale ved korte pauser, ikke ekte feil
-    if (e.error !== 'no-speech' && e.error !== 'aborted') {
-      gjenkjenningFeilet = true;
-      logg('Dikteringsfeil: ' + forklaring, 'feil');
-    }
-    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-      dikteringAktiv = false;
-      pip(PIP.feil);
+    if (ALVORLIGE_FEIL.includes(e.error)) {
+      dikteringSviktet(forklaring);
+    } else {
+      logg('Diktering: ' + forklaring + ' (ufarlig)', 'info');
     }
   };
 
@@ -1212,7 +1266,10 @@ function lagOgStart(SR) {
       samletTekst = (samletTekst + ' ' + sesjonTekst).trim();
       sesjonTekst = '';
     }
+    logg('Gjenkjenningsøkt slutt (tekst så langt: ' +
+      (samletTekst ? '«' + samletTekst + '»' : 'ingen') + ')', 'info');
     if (dikteringAktiv) {
+      omstarter++;
       omstartTimer = setTimeout(() => {
         if (dikteringAktiv) lagOgStart(SR);
       }, 250);
@@ -1222,8 +1279,7 @@ function lagOgStart(SR) {
   try {
     gjenkjenning.start();
   } catch (e) {
-    logg('Kunne ikke starte diktering: ' + e.message, 'feil');
-    gjenkjenningFeilet = true;
+    dikteringSviktet('start-feil: ' + e.message);
   }
 }
 
@@ -1247,18 +1303,22 @@ let opptaker = null;
 let opptakBiter = [];
 let opptakStroem = null;
 
-async function startOpptak() {
-  if (!innst.backup) return;
-  if (!window.MediaRecorder || !navigator.mediaDevices) return;
+// Startes ALDRI mens dikteringen kjører – de kan ikke dele mikrofonen.
+// Kalles kun fra «alltid»-modus eller fra dikteringSviktet().
+async function startOpptak(aarsak) {
+  if (!window.MediaRecorder || !navigator.mediaDevices) {
+    logg('Opptak utilgjengelig (MediaRecorder mangler)', 'feil');
+    return;
+  }
   try {
     opptakStroem = await navigator.mediaDevices.getUserMedia({ audio: true });
     opptakBiter = [];
     opptaker = new MediaRecorder(opptakStroem);
     opptaker.ondataavailable = e => { if (e.data.size) opptakBiter.push(e.data); };
     opptaker.start();
+    logg('Opptak startet (' + aarsak + ')', 'ok');
   } catch (e) {
-    // Dikteringen er viktigst – opptak som feiler skal aldri stoppe den
-    logg('Sikkerhetsopptak startet ikke: ' + e.message, 'feil');
+    logg('Opptak startet ikke: ' + e.message, 'feil');
     opptaker = null;
     frigiStroem();
   }
@@ -1276,6 +1336,7 @@ function stoppOpptak() {
     if (!opptaker || opptaker.state === 'inactive') { frigiStroem(); return res(null); }
     opptaker.onstop = () => {
       const blob = opptakBiter.length ? new Blob(opptakBiter, { type: opptaker.mimeType }) : null;
+      logg(blob ? 'Opptak lagret (' + Math.round(blob.size / 1024) + ' kB)' : 'Opptak var tomt', 'info');
       opptaker = null;
       frigiStroem();
       res(blob);
@@ -1283,6 +1344,66 @@ function stoppOpptak() {
     try { opptaker.stop(); } catch (e) { frigiStroem(); res(null); }
   });
 }
+
+/* ---------- Diagnose: tåler telefonen samtidig diktering og opptak? ---------- */
+
+// Kjører to faser og logger resultatet. Får «diktering først» fortsatt
+// resultater ETTER at mikrofonstrømmen åpnes, tåler telefonen samtidighet –
+// da kan «alltid backup» gjeninnføres uten å ofre transkripsjonen.
+$('knappMicTest').onclick = async () => {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR || !navigator.mediaDevices) {
+    logg('Mikrofontest: nødvendige API-er mangler', 'feil');
+    return;
+  }
+  if (tilstand === 'LYTTER') { logg('Mikrofontest: avslutt kommentaren først', 'feil'); return; }
+  $('knappMicTest').disabled = true;
+  logg('MIKROFONTEST starter – snakk sammenhengende i ca. 15 sekunder', 'media');
+  const vent = ms => new Promise(r => setTimeout(r, ms));
+
+  async function fase(navn, opptakFoerst) {
+    let resultater = 0;
+    let sisteFeil = '';
+    const rec = new SR();
+    rec.lang = innst.sprak;
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.onresult = () => { resultater++; };
+    rec.onerror = e => { sisteFeil = e.error; };
+    let stroem = null;
+    try {
+      if (opptakFoerst) {
+        stroem = await navigator.mediaDevices.getUserMedia({ audio: true });
+        await vent(400);
+        try { rec.start(); } catch (e) { sisteFeil = e.message; }
+        await vent(5000);
+        logg('Test «' + navn + '»: ' + resultater + ' gjenkjenningsresultater' +
+          (sisteFeil ? ' · siste feil: ' + sisteFeil : ''), resultater ? 'ok' : 'feil');
+      } else {
+        try { rec.start(); } catch (e) { sisteFeil = e.message; }
+        await vent(3000);
+        const foer = resultater;
+        stroem = await navigator.mediaDevices.getUserMedia({ audio: true });
+        await vent(4000);
+        logg('Test «' + navn + '»: ' + foer + ' resultater FØR mikrofonstrøm, ' +
+          (resultater - foer) + ' ETTER' +
+          (sisteFeil ? ' · siste feil: ' + sisteFeil : ''),
+          (resultater - foer) > 0 ? 'ok' : 'feil');
+      }
+    } catch (e) {
+      logg('Test «' + navn + '» feilet: ' + e.message, 'feil');
+    } finally {
+      try { rec.stop(); } catch (e) { /* alt stoppet */ }
+      if (stroem) stroem.getTracks().forEach(t => t.stop());
+    }
+  }
+
+  await fase('diktering først', false);
+  await vent(800);
+  await fase('opptak først', true);
+  logg('MIKROFONTEST ferdig. Kopier loggen og send den til utvikleren.', 'media');
+  $('knappMicTest').disabled = false;
+};
 
 /* ═══════════════ Wake Lock ═══════════════ */
 
@@ -1615,7 +1736,7 @@ function fyllInnstillinger() {
   $('innSpolLengde').value = innst.spolLengde;
   $('innHastighet').value = innst.hastighet;
   $('innPip').checked = innst.pip;
-  $('innBackup').checked = innst.backup;
+  $('innBackupModus').value = innst.backupModus;
   $('innSprak').value = innst.sprak;
   $('innFps').value = innst.fps;
   $('innDiagnose').checked = innst.diagnose;
@@ -1654,7 +1775,11 @@ $('innHastighet').addEventListener('change', () => {
 });
 
 $('innPip').addEventListener('change', () => { innst.pip = $('innPip').checked; lagreInnstillinger(); });
-$('innBackup').addEventListener('change', () => { innst.backup = $('innBackup').checked; lagreInnstillinger(); });
+$('innBackupModus').addEventListener('change', () => {
+  innst.backupModus = $('innBackupModus').value;
+  lagreInnstillinger();
+  logg('Backupmodus: ' + innst.backupModus, 'ok');
+});
 $('innSprak').addEventListener('change', () => { innst.sprak = $('innSprak').value; lagreInnstillinger(); });
 $('innFps').addEventListener('change', () => {
   innst.fps = Number($('innFps').value);
