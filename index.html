@@ -155,6 +155,11 @@
 <!-- 2. Media Session-logg -->
 <section>
   <h2>2. Mediekommando-logg</h2>
+  <div class="rad" style="margin-bottom:10px">
+    <input type="checkbox" id="pipPa" checked style="width:28px;height:28px">
+    <label for="pipPa">Pip ved hver mediekommando</label>
+    <button id="knappToner">🔊 Hør tonene</button>
+  </div>
   <div id="logg"></div>
   <div class="rad" style="margin-top:8px">
     <button id="kopierLogg">📋 Kopier logg</button>
@@ -249,6 +254,53 @@ function settStatus(tekst) {
   $('statusTekst').textContent = tekst;
 }
 
+/* ---------- Lydsignaler ---------- */
+
+// Hver mediekommando får sin egen tonesekvens, slik at knappene kan kartlegges
+// på gehør uten å se på skjermen. Tonene genereres med Web Audio, ingen filer.
+let lydCtx = null;
+
+function vekkLyd() {
+  if (!lydCtx) lydCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (lydCtx.state === 'suspended') lydCtx.resume();
+}
+
+// toner: liste med frekvenser i Hz, spilles etter hverandre
+function pip(toner, tonelengde) {
+  if (!$('pipPa').checked) return;
+  try {
+    vekkLyd();
+    const lengde = tonelengde || 0.12;
+    toner.forEach((frekvens, i) => {
+      const osc = lydCtx.createOscillator();
+      const gain = lydCtx.createGain();
+      const start = lydCtx.currentTime + i * lengde;
+      osc.frequency.value = frekvens;
+      osc.type = 'sine';
+      // Myk inn- og utgang så det ikke knepper
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.35, start + 0.01);
+      gain.gain.setValueAtTime(0.35, start + lengde - 0.03);
+      gain.gain.linearRampToValueAtTime(0, start + lengde - 0.005);
+      osc.connect(gain).connect(lydCtx.destination);
+      osc.start(start);
+      osc.stop(start + lengde);
+    });
+  } catch (e) { /* lyd er kun hjelpemiddel – aldri kritisk */ }
+}
+
+// Tonesekvens per kommando: stigende = framover, fallende = bakover
+const PIP = {
+  play:          [880],
+  pause:         [560],
+  stop:          [440, 380],
+  nexttrack:     [700, 1100],
+  previoustrack: [1100, 700],
+  seekforward:   [700, 1000, 1300],
+  seekbackward:  [1300, 1000, 700],
+  seekto:        [1200, 1200]
+};
+
 /* ---------- Lydkilde ---------- */
 
 let gjeldendeTittel = 'Ingen fil valgt';
@@ -289,17 +341,33 @@ function spol(deltaSek) {
 }
 
 $('knappPlay').onclick = () => {
+  vekkLyd();   // lydsignalene krever et brukertrykk for å få lov til å spille
+  sisteUtloser = { kilde: 'skjermknapp', tid: Date.now() };
   spiller.play().catch(err => logg('Kunne ikke starte avspilling: ' + err.message, 'feil'));
 };
-$('knappPause').onclick = () => spiller.pause();
-$('knappFram').onclick = () => spol(spolLengde());
-$('knappTilbake').onclick = () => spol(-spolLengde());
+$('knappPause').onclick = () => {
+  sisteUtloser = { kilde: 'skjermknapp', tid: Date.now() };
+  spiller.pause();
+};
+$('knappFram').onclick = () => { pip(PIP.nexttrack); spol(spolLengde()); };
+$('knappTilbake').onclick = () => { pip(PIP.previoustrack); spol(-spolLengde()); };
 
 // Når mikrofonen åpnes, tar Android lydfokus fra Chrome, og Chrome pauser
 // lyden av seg selv – men gjenopptar den også av seg selv når fokus slippes,
 // midt i dikteringen. Denne vakten holder lyden pauset mens vi lytter, slik
 // fase 2 krever. Kan slås av for å se den rå oppførselen.
 let holdPause = false;
+
+// Hvem utløste sist en endring? Brukes til å skille et ekte knappetrykk fra
+// pause/play som Android selv forårsaker (f.eks. når Bluetooth kobles fra).
+let sisteUtloser = { kilde: null, tid: 0 };
+
+function utloserTekst() {
+  if (Date.now() - sisteUtloser.tid < 500 && sisteUtloser.kilde) {
+    return ' – utløst av ' + sisteUtloser.kilde;
+  }
+  return ' – UTEN forutgående kommando (systemet selv)';
+}
 
 // Logg det lydelementet faktisk gjør – uavhengig av hvor kommandoen kom fra
 spiller.addEventListener('play', () => {
@@ -308,13 +376,13 @@ spiller.addEventListener('play', () => {
     logg('Blokkerte automatisk gjenopptak (lydfokus tilbake)', 'media');
     return;
   }
-  logg('Avspilling startet', 'ok');
+  logg('Avspilling startet' + utloserTekst(), 'ok');
   settStatus('SPILLER');
   if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
   beOmWakeLock();
 });
 spiller.addEventListener('pause', () => {
-  logg('Avspilling pauset', 'ok');
+  logg('Avspilling pauset' + utloserTekst(), 'ok');
   settStatus('PAUSE');
   if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
 });
@@ -416,7 +484,13 @@ function registrerMediaSession() {
   };
   for (const [navn, fn] of Object.entries(handlinger)) {
     try {
-      navigator.mediaSession.setActionHandler(navn, fn);
+      // Innpakning: spill kjenningstonen og noter tidspunktet, slik at vi i
+      // ettertid kan skille kommandostyrt pause fra systemets egen pause.
+      navigator.mediaSession.setActionHandler(navn, d => {
+        sisteUtloser = { kilde: 'mediekommando', tid: Date.now() };
+        pip(PIP[navn] || [880]);
+        fn(d);
+      });
       logg('Registrert handler: ' + navn, 'ok');
     } catch (e) {
       logg('Handler ikke støttet: ' + navn, 'feil');
@@ -629,6 +703,32 @@ async function beOmWakeLock() {
   } catch (err) {
     logg('Wake Lock feilet: ' + err.message, 'feil');
   }
+}
+
+/* ---------- Lydenheter og kjenningstoner ---------- */
+
+// Spiller alle kjenningstonene etter tur, så de kan læres før kjøring
+$('knappToner').onclick = async () => {
+  vekkLyd();
+  for (const navn of Object.keys(PIP)) {
+    logg('Kjenningstone: ' + navn, 'info');
+    pip(PIP[navn]);
+    await new Promise(r => setTimeout(r, 900));
+  }
+};
+
+// Bluetooth som kobles fra eller til dukker opp her. Det er nettopp slike
+// hendelser Android selv oversetter til pause/play, så de må kunne skilles
+// fra ekte knappetrykk i loggen.
+if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+  navigator.mediaDevices.addEventListener('devicechange', async () => {
+    let navn = '';
+    try {
+      const enheter = await navigator.mediaDevices.enumerateDevices();
+      navn = ' (' + enheter.filter(d => d.kind === 'audiooutput').length + ' lydutganger)';
+    } catch (e) { /* uten mikrofontillatelse er navnene skjult – ufarlig */ }
+    logg('LYDENHET ENDRET – noe ble koblet til eller fra' + navn, 'media');
+  });
 }
 
 // Logger når Chrome legger fanen i bakgrunnen – viktig for feilsøking i bil.
