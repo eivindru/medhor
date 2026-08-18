@@ -27,6 +27,7 @@
     padding: 12px 12px 48px;
   }
   h1 { font-size: 1.3rem; margin: 8px 0 4px; }
+  #versjon { color: var(--demp); font-size: 0.85rem; font-weight: 400; }
   h2 { font-size: 1.1rem; margin: 0 0 10px; color: var(--aksent); }
   section {
     background: var(--panel);
@@ -119,7 +120,7 @@
 </head>
 <body>
 
-<h1>Medhør – fase 1: testside</h1>
+<h1>Medhør – fase 1: testside <span id="versjon"></span></h1>
 <div id="status">
   <span id="statusTekst">KLAR</span>
   <span class="tid" id="statusTid">00:00</span>
@@ -190,6 +191,11 @@
 
 <script>
 'use strict';
+
+// Bump denne ved hver endring, så det er lett å se på skjermen om telefonen
+// har lastet siste versjon (Chrome cacher iblant aggressivt i bil).
+const VERSJON = 'v7';
+document.getElementById('versjon').textContent = VERSJON;
 
 /* ---------- Hjelpere ---------- */
 
@@ -289,7 +295,9 @@ function pip(toner, tonelengde) {
   } catch (e) { /* lyd er kun hjelpemiddel – aldri kritisk */ }
 }
 
-// Tonesekvens per kommando: stigende = framover, fallende = bakover
+// Tonesekvens per kommando: stigende = framover, fallende = bakover.
+// Disse skal KUN høres når en ekte mediekommando kommer fra bilen/ratt/
+// headset – de brukes til å kartlegge rattknapper på gehør.
 const PIP = {
   play:          [880],
   pause:         [560],
@@ -300,6 +308,26 @@ const PIP = {
   seekbackward:  [1300, 1000, 700],
   seekto:        [1200, 1200]
 };
+
+// Skjermknapper får et eget, dumpt «klikk» – bevisst ulikt PIP-tonene over,
+// slik at en tone i bilen aldri kan forveksles med at du selv trykket på
+// telefonskjermen.
+function pipSkjerm() {
+  if (!$('pipPa').checked) return;
+  try {
+    vekkLyd();
+    const start = lydCtx.currentTime;
+    const osc = lydCtx.createOscillator();
+    const gain = lydCtx.createGain();
+    osc.frequency.value = 220;
+    osc.type = 'square';
+    gain.gain.setValueAtTime(0.15, start);
+    gain.gain.linearRampToValueAtTime(0, start + 0.04);
+    osc.connect(gain).connect(lydCtx.destination);
+    osc.start(start);
+    osc.stop(start + 0.05);
+  } catch (e) { /* lyd er kun hjelpemiddel – aldri kritisk */ }
+}
 
 /* ---------- Lydkilde ---------- */
 
@@ -333,24 +361,26 @@ $('spolLengde').addEventListener('change', () => {
   document.querySelectorAll('.spolTall').forEach(el => el.textContent = spolLengde());
 });
 
-function spol(deltaSek) {
+function spol(deltaSek, kilde) {
   if (!spiller.src) return;
   spiller.currentTime = Math.max(0, Math.min(spiller.duration || Infinity, spiller.currentTime + deltaSek));
-  logg('Spolte ' + (deltaSek > 0 ? '+' : '') + deltaSek + ' s → ' + formatTid(spiller.currentTime), 'info');
+  logg('Spolte ' + (deltaSek > 0 ? '+' : '') + deltaSek + ' s → ' + formatTid(spiller.currentTime) +
+    ' – utløst av ' + (kilde || 'ukjent'), 'info');
   oppdaterPosisjon();
 }
 
 $('knappPlay').onclick = () => {
-  vekkLyd();   // lydsignalene krever et brukertrykk for å få lov til å spille
+  pipSkjerm();
   sisteUtloser = { kilde: 'skjermknapp', tid: Date.now() };
   spiller.play().catch(err => logg('Kunne ikke starte avspilling: ' + err.message, 'feil'));
 };
 $('knappPause').onclick = () => {
+  pipSkjerm();
   sisteUtloser = { kilde: 'skjermknapp', tid: Date.now() };
   spiller.pause();
 };
-$('knappFram').onclick = () => { pip(PIP.nexttrack); spol(spolLengde()); };
-$('knappTilbake').onclick = () => { pip(PIP.previoustrack); spol(-spolLengde()); };
+$('knappFram').onclick = () => { pipSkjerm(); spol(spolLengde(), 'skjermknapp'); };
+$('knappTilbake').onclick = () => { pipSkjerm(); spol(-spolLengde(), 'skjermknapp'); };
 
 // Når mikrofonen åpnes, tar Android lydfokus fra Chrome, og Chrome pauser
 // lyden av seg selv – men gjenopptar den også av seg selv når fokus slippes,
@@ -463,19 +493,19 @@ function registrerMediaSession() {
     },
     nexttrack: () => {
       logg('MEDIAKOMMANDO: nexttrack', 'media');
-      spol(spolLengde());
+      spol(spolLengde(), 'mediekommando (nexttrack)');
     },
     previoustrack: () => {
       logg('MEDIAKOMMANDO: previoustrack', 'media');
-      spol(-spolLengde());
+      spol(-spolLengde(), 'mediekommando (previoustrack)');
     },
     seekforward: d => {
       logg('MEDIAKOMMANDO: seekforward' + (d && d.seekOffset ? ' (' + d.seekOffset + ' s)' : ''), 'media');
-      spol((d && d.seekOffset) || spolLengde());
+      spol((d && d.seekOffset) || spolLengde(), 'mediekommando (seekforward)');
     },
     seekbackward: d => {
       logg('MEDIAKOMMANDO: seekbackward' + (d && d.seekOffset ? ' (' + d.seekOffset + ' s)' : ''), 'media');
-      spol(-((d && d.seekOffset) || spolLengde()));
+      spol(-((d && d.seekOffset) || spolLengde()), 'mediekommando (seekbackward)');
     },
     seekto: d => {
       logg('MEDIAKOMMANDO: seekto → ' + formatTid(d.seekTime), 'media');
@@ -595,8 +625,15 @@ function startGjenkjenning() {
     let interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const r = e.results[i];
-      if (r.isFinal) leggTilFinal(r[0].transcript);
-      else interim += r[0].transcript;
+      if (r.isFinal) {
+        // Rå tekst slik den kom fra API-et, FØR dedup – nyttig for feilsøking
+        // hvis Android igjen sender kumulative/reviderte gjentakelser.
+        logg('Diktert (rå): «' + r[0].transcript.trim() + '» (sikkerhet ' +
+          Math.round((r[0].confidence || 0) * 100) + ' %)', 'ok');
+        leggTilFinal(r[0].transcript);
+      } else {
+        interim += r[0].transcript;
+      }
     }
     visTolketTekst(interim);
   };
