@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#111318">
+<title>Proofear – installer appen</title>
+<style>
+  :root { --bg:#111318; --panel:#1c1f26; --tekst:#e8eaf0; --demp:#9aa0ae;
+          --aksent:#4da3ff; --ok:#3ddc84; --varsel:#ffd54d; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--tekst);
+         font-family:system-ui,sans-serif; font-size:18px; line-height:1.55;
+         padding:20px 16px 60px; max-width:640px; margin:0 auto; }
+  h1 { font-size:1.6rem; margin:0 0 4px; }
+  h2 { font-size:1.1rem; color:var(--aksent); margin:26px 0 8px; }
+  .versjon { color:var(--demp); font-size:0.95rem; }
+  section { background:var(--panel); border-radius:12px; padding:16px; margin:18px 0; }
+  a.knapp { display:block; background:#1c4d80; border:1px solid var(--aksent);
+            color:var(--tekst); text-decoration:none; text-align:center;
+            border-radius:12px; padding:20px; font-size:1.25rem; font-weight:700;
+            margin:18px 0 8px; }
+  a.knapp small { display:block; font-weight:400; font-size:0.85rem;
+                  color:var(--demp); margin-top:4px; }
+  a { color:var(--aksent); }
+  ul { padding-left:22px; margin:8px 0; }
+  li { margin:6px 0; }
+  .ok::marker { color:var(--ok); }
+  .venter::marker { color:var(--varsel); }
+  .merknad { border-left:4px solid var(--varsel); padding:10px 14px;
+             background:#2a1f14; border-radius:8px; margin:14px 0; }
+  code { background:#14161c; padding:2px 6px; border-radius:4px; font-size:0.9em; }
+</style>
+</head>
+<body>
+
+<h1>Proofear</h1>
+<div class="versjon">Testversjon 0.3 · milepæl A3 · 19. august 2026</div>
+
+<a class="knapp" href="proofear.apk" download>⬇ Last ned og installer
+  <small>4,4 MB · Android 8 eller nyere</small></a>
+
+<section>
+  <h2>Slik installerer du</h2>
+  <p>Trykk på knappen over på telefonen. Chrome advarer om at filtypen kan skade
+    enheten – det er en standardadvarsel for alle apper utenfor Play Store, og
+    du velger «Last ned likevel».</p>
+  <p>Åpne filen når den er lastet ned. Første gang må du gi Chrome lov til å
+    installere apper: Android sender deg til en innstillingsside der du slår på
+    tillatelsen, og så går du tilbake og fullfører.</p>
+  <p>Appen dukker opp som <strong>Proofear</strong> i appskuffen. Den kan stå
+    installert side om side med nettversjonen – de deler ikke data.</p>
+</section>
+
+<section>
+  <h2>Hva som virker i denne versjonen</h2>
+  <ul>
+    <li class="ok">Rattknappene styrer kommentarsyklusen. Appen er nå systemets
+      knappemottaker, så oppryddingen du måtte gjøre for nettversjonen –
+      tvangsstoppe andre medieapper – skal ikke lenger være nødvendig.</li>
+    <li class="ok">Ett trykk per handling. Dobbelttrykkingen fra nettversjonen
+      skal være borte.</li>
+    <li class="ok">Tittel og posisjon på bilskjermen.</li>
+    <li class="ok">Alt det andre fra nettversjonen: prosjekter, tidslinje,
+      lagring, CSV-eksport.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Hva som ikke er ferdig</h2>
+  <ul>
+    <li class="venter"><strong>Dikteringen er uavklart.</strong> Den startet i
+      emulatoren, men emulatoren har ingen mikrofon, så vi vet ikke om den
+      virker på ekte telefon. Gjør den ikke det, lagres kommentarene med
+      <code>[ikke transkribert]</code> – tidskodene er riktige uansett, og
+      teksten kan skrives inn manuelt etterpå.</li>
+    <li class="venter">Lydfilen huskes fortsatt ved kopiering, ikke ved
+      filhåndtak. Kommer i neste milepæl.</li>
+    <li class="venter">Android Auto er ikke støttet ennå. Koble fra AA som før.</li>
+  </ul>
+</section>
+
+<div class="merknad">
+  <strong>Det viktigste å teste:</strong> om rattknappene flytter syklusen med
+  ett trykk per handling, uten at du først må rydde bort andre medieapper.
+  Og om dikteringen gir tekst.
+</div>
+
+<section>
+  <h2>Feilsøking</h2>
+  <p>Slå på diagnoseloggen under Innstillinger før du kjører. Etterpå kan du
+    kopiere loggen derfra og lime den inn.</p>
+  <p>Nettversjonen ligger fortsatt på
+    <a href="./">eivindru.github.io/medhor</a>, og fase 1-testsiden på
+    <a href="test.html">test.html</a>.</p>
+</section>
+
+</body>
+</html>
