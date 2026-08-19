@@ -465,7 +465,7 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v1.3';
+const VERSJON = 'v1.4';
 
 // Nettleseren gir aldri en webapp filstien. Dette API-et gir i stedet et
 // håndtak som kan lagres og gjenbrukes mot et tillatelsestrykk – finnes i
@@ -867,14 +867,41 @@ const anker = new Audio();
 anker.loop = true;
 anker.src = lagStilleWav(60);
 
-// Ankeret skal gå når vi er i kjøremodus og hovedlyden ikke spiller
+// Ankeret går HELE tiden i kjøremodus, også mens hovedlyden spiller.
+//
+// Grunnen er bilens veksleknapp: den sender det motsatte av det den tror
+// pågår, og Chrome svelger en «play» når den selv mener det allerede spilles.
+// Gikk ankeret bare under pause (til og med v1.3), skiftet Chromes oppfatning
+// for hver overgang, bilen mistet synkroniseringen, og annethvert trykk
+// forsvant uten spor – derav dobbelttrykkingen i bilen. Med ankeret konstant
+// på endrer tilstanden seg aldri, bilen sender alltid samme kommando, og
+// hvert trykk kommer fram.
 function oppdaterAnker() {
-  const skalSpille = visningNa === 'kjoremodus' && spiller.paused;
+  const skalSpille = visningNa === 'kjoremodus';
   if (skalSpille && anker.paused) {
     anker.play().catch(err => logg('Sesjonsanker startet ikke: ' + err.message, 'feil'));
   } else if (!skalSpille && !anker.paused) {
     anker.pause();
   }
+}
+
+// Android pauser ankeret når mikrofonen tar lydfokus. Under diktering lar vi
+// det ligge – å slåss om mikrofonen ville skadet gjenkjenningen – men ellers
+// startes det igjen, så Chromes tilstand holder seg stabil.
+let ankerRetryTimer = null;
+anker.addEventListener('pause', () => {
+  if (visningNa !== 'kjoremodus' || tilstand === 'LYTTER') return;
+  clearTimeout(ankerRetryTimer);
+  ankerRetryTimer = setTimeout(oppdaterAnker, 400);
+});
+
+// Hva vi melder til bilen om avspillingstilstanden. I kjøremodus alltid
+// «spiller», fordi ankeret faktisk spiller – melder vi «pauset» mens et
+// element går, desynkroniseres bilens veksleknapp (se over).
+function meldTilstand() {
+  if (!('mediaSession' in navigator)) return;
+  const spiller_na = (visningNa === 'kjoremodus') || !spiller.paused;
+  navigator.mediaSession.playbackState = spiller_na ? 'playing' : 'paused';
 }
 
 /* ---------- Pip ---------- */
@@ -962,7 +989,11 @@ let ventendeKlikk = null;
 // Alle mediekommandoer går hit. play/pause/stop skilles ALDRI semantisk:
 // bilen sender aldri play mens ankeret spiller, så den ville aldri kommet.
 function haandterKommando(kommando) {
-  logg('MEDIAKOMMANDO: ' + kommando, 'media');
+  // Tilstanden logges med, så en biltest viser om trykk forsvinner: kommer det
+  // ingen linje her ved et knappetrykk, svelget Chrome kommandoen.
+  logg('MEDIAKOMMANDO: ' + kommando + '  [' + tilstand +
+    ', anker ' + (anker.paused ? 'av' : 'på') +
+    ', melder ' + (navigator.mediaSession ? navigator.mediaSession.playbackState : '?') + ']', 'media');
   const oppf = gjeldendeKart()[kommando];
   if (!oppf) { logg('Kommandoen har ingen funksjon i dette oppsettet', 'info'); return; }
 
@@ -1057,9 +1088,7 @@ function settTilstand(ny) {
     $('stortStatus').textContent = 'KLAR';
     hint.textContent = 'Trykk hvor som helst for å starte';
   }
-  if ('mediaSession' in navigator) {
-    navigator.mediaSession.playbackState = spiller.paused ? 'paused' : 'playing';
-  }
+  meldTilstand();
   // Scrubbing midt i en pågående kommentar ville gjort det uklart hvor
   // kommentaren hører hjemme – lås tidslinjen mens vi lytter
   $('scrubber').disabled = (ny === 'LYTTER');
@@ -1347,13 +1376,13 @@ spiller.addEventListener('play', () => {
     logg('Blokkerte automatisk gjenopptak', 'media');
     return;
   }
-  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+  meldTilstand();
   oppdaterAnker();
   beOmWakeLock();
 });
 
 spiller.addEventListener('pause', () => {
-  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+  meldTilstand();
   oppdaterAnker();
 });
 
