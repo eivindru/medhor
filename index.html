@@ -253,17 +253,32 @@
     <h2>Aktivt prosjekt</h2>
     <div id="aktivtProsjekt" class="tom">Ingen prosjekter ennå.</div>
     <div class="felt">
-      <label for="filVelger">Lydfil (velges på nytt hver gang appen åpnes)</label>
+      <label for="filVelger">Lydfil fra telefonen</label>
       <input type="file" id="filVelger" accept="audio/*">
+      <button id="knappHandtak" class="liten" style="display:none;margin-top:8px">📂 Velg fil som huskes</button>
     </div>
+    <div class="felt">
+      <label for="urlFelt">…eller lydfil fra en nettadresse</label>
+      <div class="rad">
+        <input type="url" id="urlFelt" placeholder="https://…" inputmode="url" style="flex:1;min-width:0">
+        <button id="knappLastUrl" class="liten">Hent</button>
+      </div>
+    </div>
+
+    <div class="rad felt">
+      <input type="checkbox" id="lagreLyd" disabled>
+      <label for="lagreLyd">Lagre lydfilen i appen, så den er klar neste gang</label>
+    </div>
+    <div id="lagreLydInfo" class="hjelp"></div>
+
     <div class="felt">
       <label for="tittelFelt">Tittel (brukes i CSV-eksporten)</label>
       <input type="text" id="tittelFelt" placeholder="F.eks. Kiosk #5 Solli plass">
     </div>
     <button id="knappStart" class="primaer" style="width:100%" disabled>▶ Start kjøremodus</button>
-    <p class="hjelp">Velg lydfil før du kjører. Kommentarene lagres fortløpende og
-      overlever at fanen lukkes – men selve lydfilen må velges på nytt, siden
-      nettleseren ikke får lov til å huske den.</p>
+    <p class="hjelp">Kommentarene lagres fortløpende og overlever at appen lukkes.
+      Lydfilen huskes bare hvis du krysser av over – nettleseren får nemlig aldri
+      vite hvor filen ligger på telefonen, så appen må ta en egen kopi.</p>
   </section>
 
   <section>
@@ -417,6 +432,14 @@
   </section>
 
   <section>
+    <h2>Lagring</h2>
+    <div id="lagringTotal" class="hjelp">Henter …</div>
+    <div id="lagringListe" style="margin-top:10px"></div>
+    <p class="hjelp">Å fjerne lyden fra et prosjekt sletter <em>ikke</em> kommentarene –
+      du må bare velge lydfilen på nytt hvis du skal høre den igjen.</p>
+  </section>
+
+  <section>
     <h2>Diagnose</h2>
     <div class="rad felt">
       <input type="checkbox" id="innDiagnose">
@@ -442,7 +465,16 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v1.2';
+const VERSJON = 'v1.3';
+
+// Nettleseren gir aldri en webapp filstien. Dette API-et gir i stedet et
+// håndtak som kan lagres og gjenbrukes mot et tillatelsestrykk – finnes i
+// Chrome på datamaskin, foreløpig ikke på Android. Vi tester ved kjøring, så
+// appen får gevinsten automatisk hvis det skulle komme.
+const HAR_HANDTAK = typeof window.showOpenFilePicker === 'function';
+
+// Over denne grensen må brukeren bekrefte ekstra før lydfilen lagres
+const STOR_FIL = 250 * 1024 * 1024;
 
 const $ = id => document.getElementById(id);
 $('versjon').textContent = VERSJON;
@@ -623,11 +655,14 @@ let db = null;
 
 function aapneDb() {
   return new Promise((res, rej) => {
-    const req = indexedDB.open('medhor', 1);
+    const req = indexedDB.open('medhor', 2);
     req.onupgradeneeded = e => {
       const d = e.target.result;
       if (!d.objectStoreNames.contains('prosjekter')) d.createObjectStore('prosjekter', { keyPath: 'id' });
       if (!d.objectStoreNames.contains('lydklipp')) d.createObjectStore('lydklipp', { keyPath: 'id' });
+      // v2: hele lydfilen per prosjekt, og filhåndtak der nettleseren støtter det
+      if (!d.objectStoreNames.contains('lydfiler')) d.createObjectStore('lydfiler', { keyPath: 'id' });
+      if (!d.objectStoreNames.contains('handtak')) d.createObjectStore('handtak', { keyPath: 'id' });
     };
     req.onsuccess = () => res(req.result);
     req.onerror = () => rej(req.error);
@@ -669,15 +704,21 @@ async function lagreProsjekt() {
   await dbSkriv('prosjekter', prosjekt);
 }
 
-async function nyttProsjekt(filnavn, tittel) {
-  prosjekt = {
+async function nyttProsjekt(filnavn, tittel, ekstra) {
+  prosjekt = Object.assign({
     id: nyId(),
     filnavn: filnavn,
     tittel: tittel || filnavn,
     opprettet: Date.now(),
     sistPosisjonSek: 0,
-    kommentarer: []
-  };
+    kommentarer: [],
+    kilde: 'fil',        // fil | url
+    url: null,
+    filStorrelse: null,
+    filEndret: null,
+    lagretLyd: false,    // ligger en kopi i butikken «lydfiler»?
+    harHandtak: false    // finnes et FileSystemFileHandle i «handtak»?
+  }, ekstra || {});
   await lagreProsjekt();
   await lastProsjekter();
   logg('Nytt prosjekt: ' + prosjekt.tittel, 'ok');
@@ -700,9 +741,19 @@ function tegnProsjektListe() {
     navn.textContent = p.tittel;
     const under = document.createElement('div');
     under.className = 'under';
-    under.textContent = p.kommentarer.length + ' kommentarer · ' +
+    // Filnavn og størrelse vises fordi duplikater ellers ser identiske ut
+    const merker = [];
+    if (p.lagretLyd) merker.push('💾 lagret');
+    else if (p.harHandtak) merker.push('🔗 husket');
+    else if (p.kilde === 'url') merker.push('🌐 nettadresse');
+    under.textContent = p.filnavn +
+      (p.filStorrelse ? ' · ' + formatBytes(p.filStorrelse) : '') +
+      (merker.length ? ' · ' + merker.join(' ') : '');
+    const under2 = document.createElement('div');
+    under2.className = 'under';
+    under2.textContent = p.kommentarer.length + ' kommentarer · ' +
       new Date(p.opprettet).toLocaleDateString('nb-NO');
-    info.append(navn, under);
+    info.append(navn, under, under2);
 
     const velg = document.createElement('button');
     velg.className = 'liten';
@@ -711,10 +762,14 @@ function tegnProsjektListe() {
     velg.onclick = async () => {
       prosjekt = p;
       $('tittelFelt').value = p.tittel;
+      if (p.kilde === 'url' && p.url) $('urlFelt').value = p.url;
       logg('Byttet til prosjekt: ' + p.tittel, 'ok');
+      // Knappetrykket er brukergesten et eventuelt tillatelsesspørsmål trenger
+      await hentLydForProsjekt(p, true);
       tegnProsjektListe();
       visAktivtProsjekt();
       oppdaterStartKnapp();
+      oppdaterLagreLydBoks();
     };
 
     const slett = document.createElement('button');
@@ -725,11 +780,15 @@ function tegnProsjektListe() {
       for (const k of p.kommentarer) {
         if (k.lydBlobRef) await dbSlett('lydklipp', k.lydBlobRef).catch(() => {});
       }
+      // Rydd også lagret lydfil og filhåndtak, ellers blir de liggende igjen
+      await dbSlett('lydfiler', p.id).catch(() => {});
+      await dbSlett('handtak', p.id).catch(() => {});
       await dbSlett('prosjekter', p.id);
       if (prosjekt && prosjekt.id === p.id) prosjekt = null;
       await lastProsjekter();
       visAktivtProsjekt();
       oppdaterStartKnapp();
+      oppdaterLagreLydBoks();
       logg('Slettet prosjekt: ' + p.tittel, 'info');
     };
 
@@ -754,9 +813,19 @@ function visAktivtProsjekt() {
   const under = document.createElement('div');
   under.style.color = 'var(--demp)';
   under.style.marginTop = '4px';
-  under.textContent = prosjekt.kommentarer.length + ' kommentarer · fil: ' + prosjekt.filnavn +
-    (lydErValgt() ? '' : ' · lydfil ikke valgt ennå');
+  under.textContent = prosjekt.kommentarer.length + ' kommentarer · ' + prosjekt.filnavn +
+    (prosjekt.filStorrelse ? ' (' + formatBytes(prosjekt.filStorrelse) + ')' : '');
   el.append(navn, under);
+
+  if (!lydErValgt()) {
+    const mangler = document.createElement('div');
+    mangler.style.color = 'var(--varsel)';
+    mangler.style.marginTop = '6px';
+    mangler.textContent = prosjekt.harHandtak
+      ? '⚠ Lyden er ikke lastet – trykk «Velg» i listen for å gi tilgang.'
+      : '⚠ Lyden er ikke lastet – velg filen «' + prosjekt.filnavn + '» over.';
+    el.append(mangler);
+  }
 }
 
 /* ═══════════════ Lyd ═══════════════ */
@@ -1622,35 +1691,137 @@ function visVisning(navn) {
 
 /* ---------- Forberedelse ---------- */
 
-$('filVelger').addEventListener('change', async e => {
-  const fil = e.target.files[0];
-  if (!fil) return;
-  if (lydUrl) URL.revokeObjectURL(lydUrl);
+// Filen som er i bruk nå – trengs for å kunne lagre en kopi når brukeren
+// krysser av, og for å kjenne igjen prosjektet ved neste åpning
+let gjeldendeFil = null;
+
+// Finner prosjektet en fil hører til. Navn alene er ikke nok: Android
+// rapporterer samme fil ulikt avhengig av hvor den plukkes fra, og da hopet
+// det seg opp med duplikater i v1.2. Størrelsen skiller dem fra hverandre.
+function finnProsjektForFil(fil) {
+  const navnTreff = prosjekter.filter(p => p.filnavn === fil.name);
+  if (!navnTreff.length) return { treff: null, sikker: false };
+  const eksakt = navnTreff.find(p => p.filStorrelse === fil.size);
+  if (eksakt) return { treff: eksakt, sikker: true };
+  // Prosjekter fra før v1.3 mangler størrelse – godta navnetreff og fyll inn
+  const gammelt = navnTreff.find(p => p.filStorrelse == null);
+  if (gammelt) return { treff: gammelt, sikker: true };
+  return { treff: navnTreff[0], sikker: false };
+}
+
+// Tar en fil i bruk: knytter den til riktig prosjekt og gjør den spillbar.
+// handle er et FileSystemFileHandle når nettleseren støtter det, ellers null.
+async function taIBrukFil(fil, handle) {
+  if (lydUrl) { URL.revokeObjectURL(lydUrl); lydUrl = null; }
+  gjeldendeFil = fil;
   lydUrl = URL.createObjectURL(fil);
   spiller.src = lydUrl;
   $('etterSpiller').src = lydUrl;
 
-  // Passer filen et eksisterende prosjekt, gjenbruk det – ellers lag nytt
-  const eksisterende = prosjekter.find(p => p.filnavn === fil.name);
+  const { treff, sikker } = finnProsjektForFil(fil);
+  let valgt = treff;
+  if (treff && !sikker) {
+    const svar = confirm('Det finnes allerede et prosjekt som heter «' + treff.tittel +
+      '» med samme filnavn, men annen størrelse (' + formatBytes(treff.filStorrelse) +
+      ' mot ' + formatBytes(fil.size) + ').\n\nOK = fortsett på det eksisterende\n' +
+      'Avbryt = lag et nytt prosjekt');
+    if (!svar) valgt = null;
+  }
+
+  if (valgt) {
+    prosjekt = valgt;
+    prosjekt.filStorrelse = fil.size;
+    prosjekt.filEndret = fil.lastModified || null;
+    prosjekt.kilde = 'fil';
+    await lagreProsjekt();
+    $('tittelFelt').value = prosjekt.tittel;
+    logg('Gjenåpnet prosjekt: ' + prosjekt.tittel, 'ok');
+    hoppTilLagretPosisjon();
+  } else {
+    await nyttProsjekt(fil.name, $('tittelFelt').value.trim() || fil.name, {
+      kilde: 'fil', filStorrelse: fil.size, filEndret: fil.lastModified || null
+    });
+  }
+
+  // Håndtak lagres når nettleseren støtter det – da slipper vi filkopi helt
+  if (handle) {
+    try {
+      await dbSkriv('handtak', { id: prosjekt.id, handle: handle });
+      prosjekt.harHandtak = true;
+      await lagreProsjekt();
+      logg('Filhåndtak lagret – filen kan gjenåpnes uten kopi', 'ok');
+    } catch (e) {
+      logg('Kunne ikke lagre filhåndtak: ' + e.message, 'info');
+    }
+  }
+
+  settMetadata();
+  tegnProsjektListe();
+  visAktivtProsjekt();
+  oppdaterStartKnapp();
+  oppdaterLagreLydBoks();
+}
+
+function hoppTilLagretPosisjon() {
+  if (!prosjekt || !(prosjekt.sistPosisjonSek > 0)) return;
+  const mål = prosjekt.sistPosisjonSek;
+  spiller.addEventListener('loadedmetadata', function hopp() {
+    spiller.currentTime = mål;
+    spiller.removeEventListener('loadedmetadata', hopp);
+    logg('Hoppet til lagret posisjon ' + formatTid(mål), 'info');
+  });
+}
+
+$('filVelger').addEventListener('change', async e => {
+  const fil = e.target.files[0];
+  if (!fil) return;
+  await taIBrukFil(fil, null);
+});
+
+// Vises bare der nettleseren har File System Access API
+if (HAR_HANDTAK) $('knappHandtak').style.display = 'inline-block';
+
+$('knappHandtak').onclick = async () => {
+  try {
+    const [handle] = await window.showOpenFilePicker({
+      multiple: false,
+      types: [{ description: 'Lydfiler', accept: { 'audio/*':
+        ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.flac', '.opus'] } }]
+    });
+    const fil = await handle.getFile();
+    await taIBrukFil(fil, handle);
+  } catch (e) {
+    if (e.name !== 'AbortError') logg('Filvalg feilet: ' + e.message, 'feil');
+  }
+};
+
+/* ---------- Lydfil fra nettadresse ---------- */
+
+$('knappLastUrl').onclick = async () => {
+  const url = $('urlFelt').value.trim();
+  if (!url) return;
+  if (lydUrl) { URL.revokeObjectURL(lydUrl); lydUrl = null; }
+  gjeldendeFil = null;
+  spiller.src = url;
+  $('etterSpiller').src = url;
+  lydUrl = url;
+
+  const navn = decodeURIComponent(url.split('/').pop().split('?')[0]) || url;
+  const eksisterende = prosjekter.find(p => p.url === url);
   if (eksisterende) {
     prosjekt = eksisterende;
     $('tittelFelt').value = prosjekt.tittel;
-    logg('Gjenåpnet prosjekt: ' + prosjekt.tittel, 'ok');
-    if (prosjekt.sistPosisjonSek > 0) {
-      spiller.addEventListener('loadedmetadata', function hopp() {
-        spiller.currentTime = prosjekt.sistPosisjonSek;
-        spiller.removeEventListener('loadedmetadata', hopp);
-        logg('Hoppet til lagret posisjon ' + formatTid(prosjekt.sistPosisjonSek), 'info');
-      });
-    }
+    logg('Gjenåpnet prosjekt fra URL: ' + prosjekt.tittel, 'ok');
+    hoppTilLagretPosisjon();
   } else {
-    await nyttProsjekt(fil.name, $('tittelFelt').value.trim() || fil.name);
+    await nyttProsjekt(navn, $('tittelFelt').value.trim() || navn, { kilde: 'url', url: url });
   }
   settMetadata();
   tegnProsjektListe();
   visAktivtProsjekt();
   oppdaterStartKnapp();
-});
+  oppdaterLagreLydBoks();
+};
 
 $('tittelFelt').addEventListener('change', async () => {
   if (!prosjekt) return;
@@ -1665,6 +1836,217 @@ function oppdaterStartKnapp() {
   $('knappStart').disabled = !(prosjekt && lydErValgt());
 }
 
+/* ---------- Lagring av lydfilen i appen ---------- */
+
+function formatBytes(b) {
+  if (!b && b !== 0) return 'ukjent';
+  if (b < 1024) return b + ' B';
+  if (b < 1024 * 1024) return Math.round(b / 1024) + ' kB';
+  if (b < 1024 * 1024 * 1024) return (b / 1024 / 1024).toFixed(1) + ' MB';
+  return (b / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+}
+
+function oppdaterLagreLydBoks() {
+  const boks = $('lagreLyd');
+  const info = $('lagreLydInfo');
+  if (!prosjekt) {
+    boks.disabled = true;
+    boks.checked = false;
+    info.textContent = '';
+    return;
+  }
+  boks.disabled = false;
+  boks.checked = !!prosjekt.lagretLyd;
+  if (prosjekt.lagretLyd) {
+    info.textContent = 'Lyden ligger i appen (' + formatBytes(prosjekt.filStorrelse) +
+      '). Fjern krysset for å slette kopien – kommentarene beholdes.';
+  } else if (prosjekt.harHandtak) {
+    info.textContent = 'Filen huskes med et håndtak, så den kan gjenåpnes uten kopi.';
+  } else if (prosjekt.kilde === 'url') {
+    info.textContent = 'Adressen huskes uansett. Kryss av for å laste ned en kopi, ' +
+      'så slipper du nedlasting og datatrafikk i bilen.';
+  } else {
+    info.textContent = 'Uten kryss må du velge filen på nytt hver gang appen åpnes.';
+  }
+}
+
+$('lagreLyd').addEventListener('change', async () => {
+  if (!prosjekt) return;
+  const boks = $('lagreLyd');
+  if (boks.checked) {
+    boks.disabled = true;
+    $('lagreLydInfo').textContent = 'Lagrer …';
+    try {
+      let blob = gjeldendeFil;
+      if (!blob && prosjekt.kilde === 'url' && prosjekt.url) {
+        $('lagreLydInfo').textContent = 'Laster ned …';
+        const svar = await fetch(prosjekt.url);
+        if (!svar.ok) throw new Error('HTTP ' + svar.status);
+        blob = await svar.blob();
+      }
+      if (!blob) throw new Error('Ingen fil å lagre – velg lydfilen først');
+      if (blob.size > STOR_FIL &&
+          !confirm('Filen er ' + formatBytes(blob.size) + '. Lagre den likevel i appen?')) {
+        boks.checked = false;
+        boks.disabled = false;
+        oppdaterLagreLydBoks();
+        return;
+      }
+      await beOmVarigLagring();
+      await dbSkriv('lydfiler', { id: prosjekt.id, blob: blob, filnavn: prosjekt.filnavn });
+      prosjekt.lagretLyd = true;
+      prosjekt.filStorrelse = blob.size;
+      await lagreProsjekt();
+      logg('Lydfil lagret i appen (' + formatBytes(blob.size) + ')', 'ok');
+    } catch (e) {
+      boks.checked = false;
+      logg('Kunne ikke lagre lydfilen: ' + e.message, 'feil');
+      alert('Kunne ikke lagre lydfilen: ' + e.message);
+    }
+    boks.disabled = false;
+  } else {
+    await dbSlett('lydfiler', prosjekt.id).catch(() => {});
+    prosjekt.lagretLyd = false;
+    await lagreProsjekt();
+    logg('Lagret lydfil fjernet', 'info');
+  }
+  oppdaterLagreLydBoks();
+  tegnProsjektListe();
+  visAktivtProsjekt();
+  if (visningNa === 'innstillinger') tegnLagring();
+});
+
+// Chrome kan ellers rydde bort lagrede data når telefonen går tom for plass.
+// Innvilges lettere når appen er lagt til på hjemskjermen.
+async function beOmVarigLagring() {
+  if (!navigator.storage || !navigator.storage.persist) return false;
+  try {
+    if (await navigator.storage.persisted()) return true;
+    const ok = await navigator.storage.persist();
+    logg(ok ? 'Varig lagring innvilget' : 'Varig lagring ikke innvilget (data kan ryddes bort ved plassmangel)',
+      ok ? 'ok' : 'info');
+    return ok;
+  } catch (e) { return false; }
+}
+
+// Henter lyden for et prosjekt: lagret kopi, håndtak eller nettadresse.
+// Returnerer true hvis lyden er klar til avspilling.
+async function hentLydForProsjekt(p, viaBrukertrykk) {
+  if (lydUrl && lydUrl.startsWith('blob:')) URL.revokeObjectURL(lydUrl);
+  lydUrl = null;
+  gjeldendeFil = null;
+
+  // 1. Lagret kopi i appen
+  if (p.lagretLyd) {
+    try {
+      const post = await dbLes('lydfiler', p.id);
+      if (post && post.blob) {
+        gjeldendeFil = post.blob;
+        lydUrl = URL.createObjectURL(post.blob);
+        spiller.src = lydUrl;
+        $('etterSpiller').src = lydUrl;
+        logg('Lyd hentet fra appens lagring', 'ok');
+        hoppTilLagretPosisjon();
+        return true;
+      }
+    } catch (e) {
+      logg('Kunne ikke lese lagret lydfil: ' + e.message, 'feil');
+    }
+  }
+
+  // 2. Filhåndtak – krever et brukertrykk for tillatelsesspørsmålet
+  if (p.harHandtak && HAR_HANDTAK && viaBrukertrykk) {
+    try {
+      const post = await dbLes('handtak', p.id);
+      if (post && post.handle) {
+        let lov = await post.handle.queryPermission({ mode: 'read' });
+        if (lov !== 'granted') lov = await post.handle.requestPermission({ mode: 'read' });
+        if (lov === 'granted') {
+          const fil = await post.handle.getFile();
+          gjeldendeFil = fil;
+          lydUrl = URL.createObjectURL(fil);
+          spiller.src = lydUrl;
+          $('etterSpiller').src = lydUrl;
+          logg('Lyd hentet via filhåndtak', 'ok');
+          hoppTilLagretPosisjon();
+          return true;
+        }
+      }
+    } catch (e) {
+      logg('Filhåndtak virket ikke: ' + e.message, 'info');
+    }
+  }
+
+  // 3. Nettadresse
+  if (p.kilde === 'url' && p.url) {
+    lydUrl = p.url;
+    spiller.src = p.url;
+    $('etterSpiller').src = p.url;
+    logg('Lyd hentet fra nettadresse', 'ok');
+    hoppTilLagretPosisjon();
+    return true;
+  }
+
+  return false;
+}
+
+/* ---------- Lagringsoversikt i innstillinger ---------- */
+
+async function tegnLagring() {
+  const total = $('lagringTotal');
+  try {
+    if (navigator.storage && navigator.storage.estimate) {
+      const est = await navigator.storage.estimate();
+      const varig = navigator.storage.persisted ? await navigator.storage.persisted() : false;
+      total.textContent = 'Brukt ' + formatBytes(est.usage) + ' av omtrent ' +
+        formatBytes(est.quota) + ' tilgjengelig. ' +
+        (varig ? 'Lagringen er varig.' : 'Lagringen kan ryddes bort ved plassmangel.');
+    } else {
+      total.textContent = 'Nettleseren oppgir ikke lagringsforbruk.';
+    }
+  } catch (e) {
+    total.textContent = 'Kunne ikke hente lagringsforbruk.';
+  }
+
+  const liste = $('lagringListe');
+  liste.innerHTML = '';
+  const medLyd = prosjekter.filter(p => p.lagretLyd);
+  if (!medLyd.length) {
+    liste.innerHTML = '<div class="tom">Ingen prosjekter har lagret lydfil.</div>';
+    return;
+  }
+  for (const p of medLyd) {
+    const rad = document.createElement('div');
+    rad.className = 'prosjekt';
+    const info = document.createElement('div');
+    info.className = 'info';
+    const navn = document.createElement('div');
+    navn.className = 'navn';
+    navn.textContent = p.tittel;
+    const under = document.createElement('div');
+    under.className = 'under';
+    under.textContent = formatBytes(p.filStorrelse) + ' · ' + p.kommentarer.length + ' kommentarer';
+    info.append(navn, under);
+
+    const fjern = document.createElement('button');
+    fjern.className = 'liten fare';
+    fjern.textContent = 'Fjern lyd';
+    fjern.onclick = async () => {
+      if (!confirm('Fjerne lydfilen fra «' + p.tittel + '»? Kommentarene beholdes.')) return;
+      await dbSlett('lydfiler', p.id).catch(() => {});
+      p.lagretLyd = false;
+      await dbSkriv('prosjekter', p);
+      logg('Fjernet lagret lyd fra ' + p.tittel, 'info');
+      await lastProsjekter();
+      tegnLagring();
+      if (prosjekt && prosjekt.id === p.id) oppdaterLagreLydBoks();
+    };
+
+    rad.append(info, fjern);
+    liste.append(rad);
+  }
+}
+
 $('knappStart').onclick = () => {
   vekkLyd();                       // lås opp lyd mens vi har et brukertrykk
   spiller.playbackRate = innst.hastighet;
@@ -1674,7 +2056,7 @@ $('knappStart').onclick = () => {
   logg('Kjøremodus startet', 'ok');
 };
 
-$('tilInnstillinger').onclick = () => { fyllInnstillinger(); visVisning('innstillinger'); };
+$('tilInnstillinger').onclick = () => { fyllInnstillinger(); tegnLagring(); visVisning('innstillinger'); };
 $('fraInnstillinger').onclick = () => visVisning('forberedelse');
 $('tilEtterarbeid').onclick = () => { tegnKommentarer(); visVisning('etterarbeid'); };
 $('fraEtterarbeid').onclick = () => { visAktivtProsjekt(); tegnProsjektListe(); visVisning('forberedelse'); };
@@ -2025,8 +2407,24 @@ $('innDiagnose').addEventListener('change', () => {
   }
 
   registrerMediaSession();
+
+  // Har det nyeste prosjektet lagret lyd, er det klart uten at brukeren
+  // rører filvelgeren. Håndtak krever brukertrykk og hentes derfor ikke her.
+  if (prosjekter.length) {
+    const nyeste = prosjekter[0];
+    if (nyeste.lagretLyd || (nyeste.kilde === 'url' && nyeste.url)) {
+      prosjekt = nyeste;
+      $('tittelFelt').value = nyeste.tittel;
+      if (nyeste.url) $('urlFelt').value = nyeste.url;
+      await hentLydForProsjekt(nyeste, false);
+      settMetadata();
+      tegnProsjektListe();
+    }
+  }
+
   visAktivtProsjekt();
   oppdaterStartKnapp();
+  oppdaterLagreLydBoks();
 })();
 </script>
 </body>
