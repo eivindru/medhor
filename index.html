@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#111318">
-<title>Medhør</title>
+<title>Proofear</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text y='52' font-size='52'>🎧</text></svg>">
 <style>
   :root {
@@ -244,7 +244,7 @@
 <!-- ══════════ FORBEREDELSE ══════════ -->
 <div class="visning aktiv" id="forberedelse">
   <header class="topp">
-    <h1>Medhør <span class="versjon" id="versjon"></span></h1>
+    <h1>Proofear <span class="versjon" id="versjon"></span></h1>
     <button class="liten" id="tilInnstillinger">⚙ Innstillinger</button>
   </header>
   <div id="melding"></div>
@@ -465,7 +465,7 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v1.4';
+const VERSJON = 'v1.6';
 
 // Nettleseren gir aldri en webapp filstien. Dette API-et gir i stedet et
 // håndtak som kan lagres og gjenbrukes mot et tillatelsestrykk – finnes i
@@ -475,6 +475,51 @@ const HAR_HANDTAK = typeof window.showOpenFilePicker === 'function';
 
 // Over denne grensen må brukeren bekrefte ekstra før lydfilen lagres
 const STOR_FIL = 250 * 1024 * 1024;
+
+/* ---------- Native modus (Proofear-appen) ---------- */
+
+// Samme fil kjører både som nettside i Chrome og som grensesnitt inne i
+// Proofear-appen. Finnes broen, tar den native siden over mediesesjon,
+// diktering og filhåndtering; ellers brukes web-veiene nøyaktig som før.
+const NATIV = (typeof window.ProofearNative !== 'undefined');
+
+// Speiler diagnoseloggen til logcat, så feil kan leses over USB i bil
+function tilNativLogg(melding) {
+  if (!NATIV) return;
+  try { window.ProofearNative.logg(melding); } catch (e) { /* ufarlig */ }
+}
+
+// Melder tilstand og posisjon til den native mediesesjonen. Der trengs ingen
+// sesjonsanker og ingen hvit løgn om avspillingstilstanden – appen eier
+// knappene selv. Se CLAUDE.md om hvorfor web-versjonen må lyve.
+function meldNativTilstand() {
+  if (!NATIV) return;
+  try {
+    window.ProofearNative.meldTilstand(
+      tilstand,
+      spiller.currentTime || 0,
+      isFinite(spiller.duration) ? spiller.duration : 0
+    );
+  } catch (e) { /* ufarlig */ }
+}
+
+// Knappetrykk fra bilen kommer hit via broen, og går inn i nøyaktig samme
+// tilstandsmaskin som skjermtrykk og web-mediekommandoer.
+window.proofearTrykk = function () {
+  logg('NATIV KOMMANDO: trykk', 'media');
+  nesteSteg(spiller.currentTime);
+};
+
+// Kalles av appen når siden er ferdig lastet – bekrefter at native kan nå
+// inn i siden, altså at broen virker begge veier.
+window.proofearKlar = function () {
+  logg('Broen svarer begge veier – native kan kalle inn i siden', 'ok');
+};
+
+window.proofearSpol = function (sekunder) {
+  logg('NATIV KOMMANDO: spol ' + sekunder + ' s', 'media');
+  spol(Number(sekunder) || 0);
+};
 
 const $ = id => document.getElementById(id);
 $('versjon').textContent = VERSJON;
@@ -499,6 +544,7 @@ function logg(melding, type) {
   rad.append(k, t);
   loggEl.prepend(rad);
   while (loggEl.children.length > 400) loggEl.lastChild.remove();
+  if (typeof tilNativLogg === 'function') tilNativLogg(melding);
 }
 
 $('tomLogg').onclick = () => { loggEl.innerHTML = ''; };
@@ -877,7 +923,9 @@ anker.src = lagStilleWav(60);
 // på endrer tilstanden seg aldri, bilen sender alltid samme kommando, og
 // hvert trykk kommer fram.
 function oppdaterAnker() {
-  const skalSpille = visningNa === 'kjoremodus';
+  // I appen holder den native mediesesjonen knappene i live, så ankeret
+  // trengs ikke - og uten det slipper vi å melde «spiller» under pause.
+  const skalSpille = !NATIV && visningNa === 'kjoremodus';
   if (skalSpille && anker.paused) {
     anker.play().catch(err => logg('Sesjonsanker startet ikke: ' + err.message, 'feil'));
   } else if (!skalSpille && !anker.paused) {
@@ -899,8 +947,11 @@ anker.addEventListener('pause', () => {
 // «spiller», fordi ankeret faktisk spiller – melder vi «pauset» mens et
 // element går, desynkroniseres bilens veksleknapp (se over).
 function meldTilstand() {
+  meldNativTilstand();
   if (!('mediaSession' in navigator)) return;
-  const spiller_na = (visningNa === 'kjoremodus') || !spiller.paused;
+  const spiller_na = NATIV
+    ? !spiller.paused
+    : ((visningNa === 'kjoremodus') || !spiller.paused);
   navigator.mediaSession.playbackState = spiller_na ? 'playing' : 'paused';
 }
 
@@ -956,7 +1007,7 @@ function lagCover() {
   g.fillStyle = '#e8eaf0';
   g.font = 'bold 96px system-ui, sans-serif';
   g.textAlign = 'center';
-  g.fillText('Medhør', 256, 290);
+  g.fillText('Proofear', 256, 290);
   return c.toDataURL('image/png');
 }
 const coverUrl = lagCover();
@@ -964,8 +1015,8 @@ const coverUrl = lagCover();
 function settMetadata() {
   if (!('mediaSession' in navigator)) return;
   navigator.mediaSession.metadata = new MediaMetadata({
-    title: prosjekt ? prosjekt.tittel : 'Medhør',
-    artist: 'Medhør',
+    title: prosjekt ? prosjekt.tittel : 'Proofear',
+    artist: 'Proofear',
     album: 'Korrekturlytting',
     artwork: [{ src: coverUrl, sizes: '512x512', type: 'image/png' }]
   });
@@ -2296,8 +2347,8 @@ function oppdaterCsvForhaand() {
 }
 
 function csvFilnavn() {
-  const grunn = (prosjekt ? prosjekt.tittel : 'medhor').replace(/[^\wæøåÆØÅ\- ]/g, '').trim();
-  return (grunn || 'medhor') + '.csv';
+  const grunn = (prosjekt ? prosjekt.tittel : 'proofear').replace(/[^\wæøåÆØÅ\- ]/g, '').trim();
+  return (grunn || 'proofear') + '.csv';
 }
 
 function csvBlob() {
@@ -2420,7 +2471,15 @@ $('innDiagnose').addEventListener('change', () => {
   lastInnstillinger();
   oppdaterSpolVisning();
   $('csvFormat').value = innst.csvFormat;
-  logg('Medhør ' + VERSJON + ' startet', 'ok');
+  logg('Proofear ' + VERSJON + ' startet' + (NATIV ? ' – NATIV MODUS (Proofear-appen)' : ''), 'ok');
+  if (NATIV) {
+    try {
+      logg('Native lag versjon ' + window.ProofearNative.versjon() +
+        ', mikrofontilgang: ' + (window.ProofearNative.harMikrofontilgang() ? 'ja' : 'nei'), 'ok');
+    } catch (e) {
+      logg('Broen svarte ikke: ' + e.message, 'feil');
+    }
+  }
 
   if (location.protocol === 'file:') {
     logg('ADVARSEL: åpnet via file:// – Chrome blokkerer da mikrofonen. Bruk https eller localhost.', 'feil');
