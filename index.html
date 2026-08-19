@@ -465,7 +465,7 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v1.6';
+const VERSJON = 'v1.7';
 
 // Nettleseren gir aldri en webapp filstien. Dette API-et gir i stedet et
 // håndtak som kan lagres og gjenbrukes mot et tillatelsestrykk – finnes i
@@ -516,9 +516,21 @@ window.proofearKlar = function () {
   logg('Broen svarer begge veier – native kan kalle inn i siden', 'ok');
 };
 
-window.proofearSpol = function (sekunder) {
-  logg('NATIV KOMMANDO: spol ' + sekunder + ' s', 'media');
-  spol(Number(sekunder) || 0);
+// retning er 1 eller -1 – spolelengden bestemmes her, av innstillingene
+window.proofearSpol = function (retning) {
+  const n = Number(retning) || 0;
+  if (!n) return;
+  logg('NATIV KOMMANDO: spol ' + (n > 0 ? 'fram' : 'tilbake'), 'media');
+  spol(n > 0 ? innst.spolLengde : -innst.spolLengde);
+};
+
+// Bilens fremdriftslinje ble dratt
+window.proofearSoek = function (posisjonSek) {
+  const p = Number(posisjonSek);
+  if (!isFinite(p)) return;
+  logg('NATIV KOMMANDO: søk til ' + formatTid(p), 'media');
+  spiller.currentTime = Math.max(0, p);
+  if (tilstand === 'LAGRET') kommentarTid = spiller.currentTime;
 };
 
 const $ = id => document.getElementById(id);
@@ -1013,6 +1025,14 @@ function lagCover() {
 const coverUrl = lagCover();
 
 function settMetadata() {
+  if (NATIV) {
+    try {
+      window.ProofearNative.meldMetadata(
+        prosjekt ? prosjekt.tittel : 'Proofear',
+        prosjekt ? prosjekt.filnavn : ''
+      );
+    } catch (e) { /* ufarlig */ }
+  }
   if (!('mediaSession' in navigator)) return;
   navigator.mediaSession.metadata = new MediaMetadata({
     title: prosjekt ? prosjekt.tittel : 'Proofear',
@@ -1452,6 +1472,7 @@ spiller.addEventListener('timeupdate', () => {
   if (Date.now() - sistPosisjonSendt > 2000) {
     sistPosisjonSendt = Date.now();
     oppdaterPosisjon();
+    meldNativTilstand();
   }
 });
 
@@ -2130,6 +2151,10 @@ async function tegnLagring() {
 $('knappStart').onclick = () => {
   vekkLyd();                       // lås opp lyd mens vi har et brukertrykk
   spiller.playbackRate = innst.hastighet;
+  // I appen tar forgrunnstjenesten over som knappemottaker
+  if (NATIV) {
+    try { window.ProofearNative.startMedieokt(); } catch (e) { logg('Kunne ikke starte medieøkt: ' + e.message, 'feil'); }
+  }
   visVisning('kjoremodus');
   settTilstand('KLAR');
   $('stortTid').textContent = formatTid(spiller.currentTime);
@@ -2188,6 +2213,9 @@ $('knappAvslutt').onclick = async e => {
   spiller.pause();
   anker.pause();
   if (wakeLock) { try { await wakeLock.release(); } catch (err) {} wakeLock = null; }
+  if (NATIV) {
+    try { window.ProofearNative.stoppMedieokt(); } catch (e) { /* ufarlig */ }
+  }
   visVisning('forberedelse');
   visAktivtProsjekt();
   tegnProsjektListe();
