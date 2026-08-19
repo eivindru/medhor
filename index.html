@@ -143,6 +143,36 @@
   }
   #kjoreBunn button { flex: 1; min-height: 62px; font-size: 1.1rem; }
 
+  /* Tidslinje øverst i kjøremodus */
+  #kjoreTopp {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: #0c0e12;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.95rem;
+    color: var(--demp);
+  }
+  #kjoreTopp input[type="range"] {
+    flex: 1;
+    height: 44px;              /* stor treffflate for finger */
+    accent-color: var(--aksent);
+    background: transparent;
+    margin: 0;
+  }
+  #kjoreTopp input[type="range"]:disabled { opacity: 0.35; }
+
+  #melding {
+    display: none;
+    background: #2a1f14;
+    border: 2px solid var(--varsel);
+    border-radius: 10px;
+    padding: 12px;
+    margin: 12px;
+    line-height: 1.5;
+  }
+
   /* Kommentarliste */
   .kommentar {
     background: #14161c;
@@ -217,6 +247,7 @@
     <h1>Medhør <span class="versjon" id="versjon"></span></h1>
     <button class="liten" id="tilInnstillinger">⚙ Innstillinger</button>
   </header>
+  <div id="melding"></div>
 
   <section>
     <h2>Aktivt prosjekt</h2>
@@ -247,11 +278,17 @@
 
 <!-- ══════════ KJØREMODUS ══════════ -->
 <div class="visning" id="kjoremodus">
+  <div id="kjoreTopp">
+    <span id="scrubNa">00:00</span>
+    <input type="range" id="scrubber" min="0" max="0" step="0.1" value="0">
+    <span id="scrubTotal">00:00</span>
+  </div>
   <div id="trykkflate">
     <div id="stortStatus">KLAR</div>
     <div id="stortTid">00:00</div>
     <div id="stortHint">Trykk hvor som helst for å starte</div>
     <div id="liveTekst"></div>
+    <button id="knappSlettSiste" class="fare" style="display:none;margin-top:16px">🗑 Slett siste kommentar</button>
   </div>
   <div id="kjoreBunn">
     <button id="knappSpolTilbake">⏪ <span class="spolTall">5</span></button>
@@ -405,7 +442,7 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v1.1';
+const VERSJON = 'v1.2';
 
 const $ = id => document.getElementById(id);
 $('versjon').textContent = VERSJON;
@@ -954,6 +991,10 @@ function settTilstand(ny) {
   if ('mediaSession' in navigator) {
     navigator.mediaSession.playbackState = spiller.paused ? 'paused' : 'playing';
   }
+  // Scrubbing midt i en pågående kommentar ville gjort det uklart hvor
+  // kommentaren hører hjemme – lås tidslinjen mens vi lytter
+  $('scrubber').disabled = (ny === 'LYTTER');
+  visSlettKnapp();
   oppdaterAnker();
   logg('Tilstand: ' + ny, 'ok');
 }
@@ -984,6 +1025,9 @@ function gjenopptaAvspilling() {
 }
 
 function startKommentar(frossenTid) {
+  // Er forrige kommentar fortsatt under ferdigstilling, avslutt den nå med
+  // teksten som rakk å komme – tekstbufferne skal tilhøre den nye kommentaren
+  if (ferdigstilling) fullfoerKommentar();
   // Frys tidskoden nøyaktig der brukeren trykket, og sett lyden dit, slik at
   // både visning og senere gjenopptak er eksakte.
   kommentarTid = (typeof frossenTid === 'number') ? frossenTid : spiller.currentTime;
@@ -1005,31 +1049,83 @@ function startKommentar(frossenTid) {
   } else {
     startGjenkjenning();
   }
+  skrivJournal();
   logg('Kommentar startet ved ' + formatTid(kommentarTid), 'ok');
 }
 
+/* ---------- Journal: krasjsikring av pågående kommentar ---------- */
+
+// Skrives ved kommentarstart og oppdateres for hvert gjenkjente resultat.
+// Slettes når kommentaren er ferdig lagret. Finnes den ved oppstart, ble
+// appen drept midt i en kommentar – da gjenopprettes den.
+function skrivJournal() {
+  if (!prosjekt) return;
+  try {
+    localStorage.setItem('medhor-journal', JSON.stringify({
+      prosjektId: prosjekt.id,
+      tidskodeSek: kommentarTid,
+      tekst: samletNa().trim(),
+      oppdatert: Date.now()
+    }));
+  } catch (e) { /* journal er sikkerhetsnett, aldri kritisk */ }
+}
+
+function toemJournal() {
+  try { localStorage.removeItem('medhor-journal'); } catch (e) { /* ignorer */ }
+}
+
+async function gjenopprettFraJournal() {
+  let j = null;
+  try { j = JSON.parse(localStorage.getItem('medhor-journal') || 'null'); } catch (e) {}
+  if (!j) return;
+  toemJournal();
+  const p = prosjekter.find(x => x.id === j.prosjektId);
+  if (!p) {
+    logg('Fant journal etter avbrudd, men prosjektet finnes ikke lenger', 'info');
+    return;
+  }
+  // Ble kommentaren likevel lagret før avbruddet, skal den ikke dubleres
+  if (p.kommentarer.some(k => Math.abs(k.tidskodeSek - j.tidskodeSek) < 0.5)) {
+    logg('Journal etter avbrudd var alt lagret – hopper over', 'info');
+    return;
+  }
+  const kommentar = {
+    id: nyId(),
+    tidskodeSek: j.tidskodeSek || 0,
+    tekst: j.tekst || '[ikke transkribert]',
+    transkribert: !!j.tekst,
+    lydBlobRef: null,
+    opprettet: j.oppdatert || Date.now()
+  };
+  p.kommentarer.push(kommentar);
+  p.kommentarer.sort((a, b) => a.tidskodeSek - b.tidskodeSek);
+  await dbSkriv('prosjekter', p);
+  logg('Gjenopprettet avbrutt kommentar ved ' + formatTid(kommentar.tidskodeSek), 'ok');
+  const m = $('melding');
+  m.style.display = 'block';
+  m.textContent = 'Appen ble avbrutt midt i en kommentar sist. Den er gjenopprettet i «' +
+    p.tittel + '» ved ' + formatTid(kommentar.tidskodeSek) + '.';
+}
+
+// Ferdigstilling: kommentaren lagres UMIDDELBART ved trykk 2, med den teksten
+// som finnes der og da – men gjenkjenneren fortsetter å prosessere lyden den
+// alt har fanget, og sluttresultatet ankommer typisk noen hundre ms etter
+// stopp. Uten dette mistes slutten av kommentaren. Når sluttresultatet kommer
+// (via onend, eller senest ved tidsfristen) oppdateres den lagrede kommentaren.
+let ferdigstilling = null;   // { kommentarId|null, lydRef, timer }
+
 async function avsluttKommentar() {
-  const tekst = stoppGjenkjenning().trim();
+  // Be gjenkjenneren stoppe. Mikrofonen slippes med én gang, så avspillingen
+  // kan gjenopptas umiddelbart uten å forurense transkripsjonen.
+  const ventPaaGjenkjenner = dikteringAktiv;
+  dikteringAktiv = false;
+  clearTimeout(omstartTimer);
+  if (gjenkjenning) { try { gjenkjenning.stop(); } catch (e) { /* alt stoppet */ } }
+
+  pip(PIP.lagret);
+  settTilstand('LAGRET');
+
   const lydBlob = await stoppOpptak();
-
-  // Angrekommando: «slett» eller «angre» fjerner forrige kommentar
-  const foersteOrd = tekst.toLowerCase().replace(/[^a-zæøå\s]/g, '').trim().split(/\s+/)[0];
-  if (foersteOrd === 'slett' || foersteOrd === 'angre') {
-    const fjernet = await slettSisteKommentar();
-    pip(PIP.angre);
-    $('liveTekst').textContent = fjernet ? 'Slettet forrige kommentar' : 'Ingen kommentar å slette';
-    settTilstand('LAGRET');
-    return;
-  }
-
-  if (!tekst && !gjenkjenningFeilet && !lydBlob) {
-    // Ingenting sagt og ingen feil – forkast stille
-    logg('Tom kommentar forkastet', 'info');
-    $('liveTekst').textContent = 'Tom – ingenting lagret';
-    settTilstand('LAGRET');
-    return;
-  }
-
   let lydRef = null;
   if (lydBlob) {
     lydRef = nyId();
@@ -1041,41 +1137,132 @@ async function avsluttKommentar() {
     }
   }
 
+  const tekstNa = samletNa().trim();
+  let kommentarId = null;
+  if (tekstNa || gjenkjenningFeilet || lydRef) {
+    kommentarId = await lagreKommentar(tekstNa, lydRef, kommentarTid);
+  } else {
+    $('liveTekst').textContent = 'Venter på tekst …';
+  }
+
+  // Tidskoden bindes inn her: starter brukeren en ny kommentar før denne er
+  // ferdigstilt, skal etterslengeren fortsatt lagres på riktig sted
+  ferdigstilling = { kommentarId: kommentarId, lydRef: lydRef, tidskodeSek: kommentarTid, timer: null };
+  if (ventPaaGjenkjenner) {
+    // onend fullfører som regel før fristen – denne er bare et sikkerhetsnett
+    ferdigstilling.timer = setTimeout(fullfoerKommentar, 3000);
+  } else {
+    fullfoerKommentar();
+  }
+  visSlettKnapp();
+}
+
+// Lagrer en kommentar på gitt tidskode og returnerer id-en
+async function lagreKommentar(tekst, lydRef, tidskodeSek) {
   const kommentar = {
     id: nyId(),
-    tidskodeSek: kommentarTid,
+    tidskodeSek: tidskodeSek,
     tekst: tekst || '[ikke transkribert]',
     transkribert: !!tekst,
-    lydBlobRef: lydRef,
+    lydBlobRef: lydRef || null,
     opprettet: Date.now()
   };
   prosjekt.kommentarer.push(kommentar);
   prosjekt.kommentarer.sort((a, b) => a.tidskodeSek - b.tidskodeSek);
   await lagreProsjekt();
-
-  pip(PIP.lagret);
-  $('liveTekst').textContent = formatTid(kommentarTid) + '  ' + kommentar.tekst;
-  settTilstand('LAGRET');
+  if (tilstand === 'LAGRET') {
+    $('liveTekst').textContent = formatTid(tidskodeSek) + '  ' + kommentar.tekst;
+  }
   logg('Lagret kommentar: «' + kommentar.tekst + '»', 'ok');
+  return kommentar.id;
 }
 
-async function slettSisteKommentar() {
-  if (!prosjekt || !prosjekt.kommentarer.length) return false;
-  // Nyeste etter opprettelsestidspunkt, ikke etter tidskode
-  let nyest = prosjekt.kommentarer[0];
-  for (const k of prosjekt.kommentarer) if (k.opprettet > nyest.opprettet) nyest = k;
-  prosjekt.kommentarer = prosjekt.kommentarer.filter(k => k.id !== nyest.id);
-  if (nyest.lydBlobRef) await dbSlett('lydklipp', nyest.lydBlobRef).catch(() => {});
+// Kjøres når gjenkjenneren er helt ferdig (onend) eller fristen løper ut:
+// oppdaterer den lagrede kommentaren med den fullstendige teksten.
+async function fullfoerKommentar() {
+  if (!ferdigstilling) return;
+  const f = ferdigstilling;
+  ferdigstilling = null;
+  clearTimeout(f.timer);
+  const tekst = samletNa().trim();
+  samletTekst = '';
+  sesjonTekst = '';
+  kumulativModus = false;
+  toemJournal();
+
+  if (f.kommentarId) {
+    const k = prosjekt && prosjekt.kommentarer.find(x => x.id === f.kommentarId);
+    if (!k) return;   // slettet av brukeren mens teksten ble ferdig
+    if (tekst && tekst !== k.tekst) {
+      k.tekst = tekst;
+      k.transkribert = true;
+      await lagreProsjekt();
+      if (tilstand === 'LAGRET') $('liveTekst').textContent = formatTid(k.tidskodeSek) + '  ' + tekst;
+      logg('Kommentar ferdigstilt: «' + tekst + '»', 'ok');
+    }
+  } else if (tekst || f.lydRef) {
+    // Ingenting var lagret ved trykket, men teksten kom i etterkant
+    await lagreKommentar(tekst, f.lydRef, f.tidskodeSek);
+    visSlettKnapp();
+  } else {
+    logg('Tom kommentar forkastet', 'info');
+    if (tilstand === 'LAGRET') $('liveTekst').textContent = 'Tom – ingenting lagret';
+    visSlettKnapp();
+  }
+}
+
+// Sletting skjer kun via skjermknapp (talekommandoen «slett» er fjernet
+// etter ønske fra brukeren).
+function visSlettKnapp() {
+  const harNoe = !!(ferdigstilling || (prosjekt && prosjekt.kommentarer.length));
+  $('knappSlettSiste').style.display = (tilstand === 'LAGRET' && harNoe) ? 'inline-block' : 'none';
+}
+
+$('knappSlettSiste').onclick = async e => {
+  e.stopPropagation();
+  if (ferdigstilling) {
+    // Kommentaren er fortsatt under ferdigstilling – avbryt den helt, så
+    // etterslengeren ikke gjenoppretter det brukeren nettopp slettet
+    const f = ferdigstilling;
+    ferdigstilling = null;
+    clearTimeout(f.timer);
+    samletTekst = '';
+    sesjonTekst = '';
+    kumulativModus = false;
+    toemJournal();
+    if (f.kommentarId) {
+      await slettKommentarMedId(f.kommentarId);
+    }
+    if (f.lydRef) await dbSlett('lydklipp', f.lydRef).catch(() => {});
+  } else {
+    // Nyeste etter opprettelsestidspunkt, ikke etter tidskode
+    if (!prosjekt || !prosjekt.kommentarer.length) return;
+    let nyest = prosjekt.kommentarer[0];
+    for (const k of prosjekt.kommentarer) if (k.opprettet > nyest.opprettet) nyest = k;
+    await slettKommentarMedId(nyest.id);
+  }
+  pip(PIP.angre);
+  $('liveTekst').textContent = 'Slettet';
+  visSlettKnapp();
+};
+
+async function slettKommentarMedId(id) {
+  const k = prosjekt.kommentarer.find(x => x.id === id);
+  if (!k) return;
+  prosjekt.kommentarer = prosjekt.kommentarer.filter(x => x.id !== id);
+  if (k.lydBlobRef) await dbSlett('lydklipp', k.lydBlobRef).catch(() => {});
   await lagreProsjekt();
-  logg('Angret: slettet «' + nyest.tekst + '»', 'info');
-  return true;
+  logg('Slettet kommentar «' + k.tekst + '»', 'info');
 }
 
 function spol(delta) {
   if (!lydErValgt()) return;
   const maks = isFinite(spiller.duration) ? spiller.duration : Infinity;
   spiller.currentTime = Math.max(0, Math.min(maks, spiller.currentTime + delta));
-  if (tilstand === 'LYTTER' || tilstand === 'LAGRET') kommentarTid = spiller.currentTime;
+  if (tilstand === 'LYTTER' || tilstand === 'LAGRET') {
+    kommentarTid = spiller.currentTime;
+    if (tilstand === 'LYTTER') skrivJournal();
+  }
   oppdaterPosisjon();
   logg('Spolte ' + (delta > 0 ? '+' : '') + delta + ' s → ' + formatTid(spiller.currentTime), 'info');
 }
@@ -1242,12 +1429,14 @@ function lagOgStart(SR) {
         logg('Diktert (rå): «' + r[0].transcript.trim() + '» (' +
           Math.round((r[0].confidence || 0) * 100) + ' %)', 'ok');
         leggTilFinal(r[0].transcript);
+        if (tilstand === 'LYTTER') skrivJournal();
       } else {
         interim += r[0].transcript;
       }
     }
-    const vist = (samletNa() + ' ' + interim).trim();
-    $('liveTekst').textContent = vist;
+    if (tilstand === 'LYTTER') {
+      $('liveTekst').textContent = (samletNa() + ' ' + interim).trim();
+    }
   };
 
   gjenkjenning.onerror = e => {
@@ -1273,6 +1462,10 @@ function lagOgStart(SR) {
       omstartTimer = setTimeout(() => {
         if (dikteringAktiv) lagOgStart(SR);
       }, 250);
+    } else if (ferdigstilling) {
+      // Gjenkjenneren er helt ferdig – oppdater kommentaren med full tekst nå,
+      // uten å vente på tidsfristen
+      fullfoerKommentar();
     }
   };
 
@@ -1281,20 +1474,6 @@ function lagOgStart(SR) {
   } catch (e) {
     dikteringSviktet('start-feil: ' + e.message);
   }
-}
-
-// Stopper gjenkjenningen og returnerer all tekst som ble oppfattet
-function stoppGjenkjenning() {
-  dikteringAktiv = false;
-  clearTimeout(omstartTimer);
-  if (gjenkjenning) {
-    try { gjenkjenning.stop(); } catch (e) { /* allerede stoppet */ }
-  }
-  const alt = samletNa();
-  samletTekst = '';
-  sesjonTekst = '';
-  kumulativModus = false;
-  return alt;
 }
 
 /* ═══════════════ Sikkerhetskopi-opptak ═══════════════ */
@@ -1507,6 +1686,38 @@ $('trykkflate').addEventListener('click', () => nesteSteg(spiller.currentTime));
 
 $('knappSpolTilbake').onclick = e => { e.stopPropagation(); spol(-innst.spolLengde); };
 $('knappSpolFram').onclick = e => { e.stopPropagation(); spol(innst.spolLengde); };
+
+/* ---------- Tidslinje (scrubbing) ---------- */
+
+const scrubber = $('scrubber');
+let scrubberHoldes = false;   // fingeren er på – ikke overskriv posisjonen
+
+// Under draing: vis tiden løpende, men vent med selve hoppet til slipp,
+// så vi ikke hamrer søk mot lydfilen
+scrubber.addEventListener('input', () => {
+  scrubberHoldes = true;
+  $('scrubNa').textContent = formatTid(Number(scrubber.value));
+});
+
+scrubber.addEventListener('change', () => {
+  scrubberHoldes = false;
+  if (!lydErValgt()) return;
+  spiller.currentTime = Number(scrubber.value);
+  if (tilstand === 'LAGRET') kommentarTid = spiller.currentTime;
+  oppdaterPosisjon();
+  logg('Scrubbet til ' + formatTid(spiller.currentTime), 'info');
+});
+
+function oppdaterScrubber() {
+  if (scrubberHoldes) return;
+  if (isFinite(spiller.duration)) {
+    scrubber.max = spiller.duration;
+    $('scrubTotal').textContent = formatTid(spiller.duration);
+  }
+  scrubber.value = spiller.currentTime;
+  $('scrubNa').textContent = formatTid(spiller.currentTime);
+}
+setInterval(() => { if (visningNa === 'kjoremodus') oppdaterScrubber(); }, 500);
 
 $('knappAvslutt').onclick = async e => {
   e.stopPropagation();
@@ -1808,6 +2019,7 @@ $('innDiagnose').addEventListener('change', () => {
     db = await aapneDb();
     await lastProsjekter();
     logg('Database klar – ' + prosjekter.length + ' prosjekter', 'ok');
+    await gjenopprettFraJournal();
   } catch (e) {
     logg('Databasen kunne ikke åpnes: ' + e.message, 'feil');
   }
