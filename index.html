@@ -399,6 +399,17 @@
       <label for="innPip">Lydsignaler (pip) ved start og stopp av lytting</label>
     </div>
     <div class="felt">
+      <label for="innSyklus">Hva knappen gjør</label>
+      <select id="innSyklus">
+        <option value="tredelt">Tre trykk: pause og lytt → lagre → fortsett</option>
+        <option value="todelt">To trykk: pause og lytt → lagre og fortsett med én gang</option>
+      </select>
+      <p class="hjelp">Med to trykk starter avspillingen automatisk i det kommentaren
+        lagres. Teksten gjør seg ferdig i bakgrunnen, så slutten mistes ikke.
+        Slett-knappen vises da en kort stund mens lyden går igjen.</p>
+    </div>
+
+    <div class="felt">
       <label for="innBackupModus">Lydopptak av kommentarer (sikkerhetskopi)</label>
       <select id="innBackupModus">
         <option value="vedBehov">Ved behov – kun når dikteringen svikter (anbefalt)</option>
@@ -465,7 +476,7 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v1.7';
+const VERSJON = 'v1.8';
 
 // Nettleseren gir aldri en webapp filstien. Dette API-et gir i stedet et
 // håndtak som kan lagres og gjenbrukes mot et tillatelsestrykk – finnes i
@@ -620,6 +631,7 @@ const STANDARD = {
   csvFormat: 'HHMMSSFF',
   pip: true,
   backupModus: 'vedBehov',   // vedBehov | alltid | av
+  syklus: 'tredelt',         // tredelt | todelt (se avsluttKommentar)
   sprak: 'nb-NO',
   diagnose: false
 };
@@ -1323,6 +1335,15 @@ async function avsluttKommentar() {
   } else {
     fullfoerKommentar();
   }
+
+  sistLagretTid = Date.now();
+  // Todelt syklus: lyden starter igjen med én gang kommentaren er lagret.
+  // Trygt selv om teksten ikke er ferdig – gjenkjenneren har alt sluppet
+  // mikrofonen, så opplesningen kan ikke forurense transkripsjonen.
+  if (innst.syklus === 'todelt') {
+    logg('Todelt syklus – fortsetter avspillingen', 'info');
+    gjenopptaAvspilling();
+  }
   visSlettKnapp();
 }
 
@@ -1382,9 +1403,15 @@ async function fullfoerKommentar() {
 
 // Sletting skjer kun via skjermknapp (talekommandoen «slett» er fjernet
 // etter ønske fra brukeren).
+let sistLagretTid = 0;
+
 function visSlettKnapp() {
   const harNoe = !!(ferdigstilling || (prosjekt && prosjekt.kommentarer.length));
-  $('knappSlettSiste').style.display = (tilstand === 'LAGRET' && harNoe) ? 'inline-block' : 'none';
+  // Todelt syklus hopper over LAGRET, så knappen vises en kort stund mens
+  // avspillingen går igjen – ellers måtte sletting gått omveien om listen.
+  const fersk = (Date.now() - sistLagretTid) < 15000;
+  const vis = harNoe && (tilstand === 'LAGRET' || (tilstand === 'SPILLER' && fersk));
+  $('knappSlettSiste').style.display = vis ? 'inline-block' : 'none';
 }
 
 $('knappSlettSiste').onclick = async e => {
@@ -2224,9 +2251,11 @@ $('knappAvslutt').onclick = async e => {
 
 // Stor tidsvisning også når lyden står stille
 setInterval(() => {
-  if (visningNa === 'kjoremodus' && tilstand !== 'SPILLER') {
+  if (visningNa !== 'kjoremodus') return;
+  if (tilstand !== 'SPILLER') {
     $('stortTid').textContent = formatTid(tilstand === 'KLAR' ? spiller.currentTime : kommentarTid);
   }
+  visSlettKnapp();
 }, 300);
 
 /* ═══════════════ Etterarbeid ═══════════════ */
@@ -2437,6 +2466,7 @@ function fyllInnstillinger() {
   $('innSpolLengde').value = innst.spolLengde;
   $('innHastighet').value = innst.hastighet;
   $('innPip').checked = innst.pip;
+  $('innSyklus').value = innst.syklus;
   $('innBackupModus').value = innst.backupModus;
   $('innSprak').value = innst.sprak;
   $('innFps').value = innst.fps;
@@ -2476,6 +2506,12 @@ $('innHastighet').addEventListener('change', () => {
 });
 
 $('innPip').addEventListener('change', () => { innst.pip = $('innPip').checked; lagreInnstillinger(); });
+$('innSyklus').addEventListener('change', () => {
+  innst.syklus = $('innSyklus').value;
+  lagreInnstillinger();
+  logg('Kommentarsyklus: ' + innst.syklus, 'ok');
+});
+
 $('innBackupModus').addEventListener('change', () => {
   innst.backupModus = $('innBackupModus').value;
   lagreInnstillinger();
