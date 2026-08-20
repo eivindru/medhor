@@ -255,6 +255,7 @@
     <div class="felt">
       <label for="filVelger">Lydfil fra telefonen</label>
       <input type="file" id="filVelger" accept="audio/*">
+      <button id="knappNativFil" class="primaer" style="display:none;width:100%">📂 Velg lydfil</button>
       <button id="knappHandtak" class="liten" style="display:none;margin-top:8px">📂 Velg fil som huskes</button>
     </div>
     <div class="felt">
@@ -276,7 +277,7 @@
       <input type="text" id="tittelFelt" placeholder="F.eks. Kiosk #5 Solli plass">
     </div>
     <button id="knappStart" class="primaer" style="width:100%" disabled>▶ Start kjøremodus</button>
-    <p class="hjelp">Kommentarene lagres fortløpende og overlever at appen lukkes.
+    <p class="hjelp" id="hjelpLagring">Kommentarene lagres fortløpende og overlever at appen lukkes.
       Lydfilen huskes bare hvis du krysser av over – nettleseren får nemlig aldri
       vite hvor filen ligger på telefonen, så appen må ta en egen kopi.</p>
   </section>
@@ -476,7 +477,7 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v1.8';
+const VERSJON = 'v2.0';
 
 // Nettleseren gir aldri en webapp filstien. Dette API-et gir i stedet et
 // håndtak som kan lagres og gjenbrukes mot et tillatelsestrykk – finnes i
@@ -536,6 +537,46 @@ window.proofearSpol = function (retning) {
 };
 
 // Bilens fremdriftslinje ble dratt
+// Appen har valgt en fil og har varig tilgang til den. Ingen kopi trengs –
+// adressen peker på Androids dokumentlager via appens egen lydtjener.
+window.proofearFilValgt = async function (adresse, navn, storrelse) {
+  const st = Number(storrelse) || null;
+  logg('Fil valgt nativt: ' + navn + (st ? ' (' + formatBytes(st) + ')' : ''), 'ok');
+
+  if (lydUrl && lydUrl.startsWith('blob:')) URL.revokeObjectURL(lydUrl);
+  gjeldendeFil = null;
+  lydUrl = adresse;
+  spiller.src = adresse;
+  $('etterSpiller').src = adresse;
+
+  // Gjenbruk prosjekt hvis samme fil, ellers lag nytt
+  const treff = prosjekter.find(p => p.nativAdresse === adresse) ||
+                prosjekter.find(p => p.filnavn === navn && p.filStorrelse === st);
+  if (treff) {
+    prosjekt = treff;
+    prosjekt.nativAdresse = adresse;
+    prosjekt.filStorrelse = st;
+    await lagreProsjekt();
+    $('tittelFelt').value = prosjekt.tittel;
+    logg('Gjenåpnet prosjekt: ' + prosjekt.tittel, 'ok');
+    hoppTilLagretPosisjon();
+  } else {
+    await nyttProsjekt(navn, $('tittelFelt').value.trim() || navn, {
+      kilde: 'nativ', nativAdresse: adresse, filStorrelse: st
+    });
+  }
+  settMetadata();
+  tegnProsjektListe();
+  visAktivtProsjekt();
+  oppdaterStartKnapp();
+  oppdaterLagreLydBoks();
+};
+
+window.proofearFilFeilet = function (grunn) {
+  logg('Filvalg feilet: ' + grunn, 'feil');
+  alert('Kunne ikke åpne filen: ' + grunn);
+};
+
 window.proofearSoek = function (posisjonSek) {
   const p = Number(posisjonSek);
   if (!isFinite(p)) return;
@@ -782,7 +823,8 @@ async function nyttProsjekt(filnavn, tittel, ekstra) {
     opprettet: Date.now(),
     sistPosisjonSek: 0,
     kommentarer: [],
-    kilde: 'fil',        // fil | url
+    kilde: 'fil',        // fil | url | nativ
+    nativAdresse: null,  // varig filtilgang i appen, se A5
     url: null,
     filStorrelse: null,
     filEndret: null,
@@ -813,7 +855,8 @@ function tegnProsjektListe() {
     under.className = 'under';
     // Filnavn og størrelse vises fordi duplikater ellers ser identiske ut
     const merker = [];
-    if (p.lagretLyd) merker.push('💾 lagret');
+    if (p.nativAdresse) merker.push('🔗 husket');
+    else if (p.lagretLyd) merker.push('💾 lagret');
     else if (p.harHandtak) merker.push('🔗 husket');
     else if (p.kilde === 'url') merker.push('🌐 nettadresse');
     under.textContent = p.filnavn +
@@ -853,6 +896,9 @@ function tegnProsjektListe() {
       // Rydd også lagret lydfil og filhåndtak, ellers blir de liggende igjen
       await dbSlett('lydfiler', p.id).catch(() => {});
       await dbSlett('handtak', p.id).catch(() => {});
+      if (NATIV && p.nativAdresse) {
+        try { window.ProofearNative.glemFil(p.nativAdresse); } catch (e) { /* ufarlig */ }
+      }
       await dbSlett('prosjekter', p.id);
       if (prosjekt && prosjekt.id === p.id) prosjekt = null;
       await lastProsjekter();
@@ -891,8 +937,8 @@ function visAktivtProsjekt() {
     const mangler = document.createElement('div');
     mangler.style.color = 'var(--varsel)';
     mangler.style.marginTop = '6px';
-    mangler.textContent = prosjekt.harHandtak
-      ? '⚠ Lyden er ikke lastet – trykk «Velg» i listen for å gi tilgang.'
+    mangler.textContent = (prosjekt.harHandtak || prosjekt.nativAdresse)
+      ? '⚠ Lyden er ikke lastet – trykk «Velg» i listen for å åpne den igjen.'
       : '⚠ Lyden er ikke lastet – velg filen «' + prosjekt.filnavn + '» over.';
     el.append(mangler);
   }
@@ -1906,8 +1952,23 @@ $('filVelger').addEventListener('change', async e => {
   await taIBrukFil(fil, null);
 });
 
-// Vises bare der nettleseren har File System Access API
-if (HAR_HANDTAK) $('knappHandtak').style.display = 'inline-block';
+// I appen brukes Androids egen filvelger, som gir varig tilgang uten kopi.
+// Da er både nettleserens filvelger og kopieringsvalget overflødige.
+if (NATIV) {
+  $('knappNativFil').style.display = 'block';
+  $('filVelger').style.display = 'none';
+  $('lagreLyd').parentElement.style.display = 'none';
+  $('hjelpLagring').textContent = 'Kommentarene lagres fortløpende og overlever ' +
+    'at appen lukkes. Lydfilen huskes automatisk uten kopi, så prosjektet er ' +
+    'klart neste gang du åpner appen.';
+} else if (HAR_HANDTAK) {
+  $('knappHandtak').style.display = 'inline-block';
+}
+
+$('knappNativFil').onclick = () => {
+  try { window.ProofearNative.velgFil(); }
+  catch (e) { logg('Kunne ikke åpne filvelgeren: ' + e.message, 'feil'); }
+};
 
 $('knappHandtak').onclick = async () => {
   try {
@@ -1988,6 +2049,8 @@ function oppdaterLagreLydBoks() {
   if (prosjekt.lagretLyd) {
     info.textContent = 'Lyden ligger i appen (' + formatBytes(prosjekt.filStorrelse) +
       '). Fjern krysset for å slette kopien – kommentarene beholdes.';
+  } else if (prosjekt.nativAdresse) {
+    info.textContent = 'Filen huskes av appen uten kopi, så den er klar neste gang.';
   } else if (prosjekt.harHandtak) {
     info.textContent = 'Filen huskes med et håndtak, så den kan gjenåpnes uten kopi.';
   } else if (prosjekt.kilde === 'url') {
@@ -2063,6 +2126,16 @@ async function hentLydForProsjekt(p, viaBrukertrykk) {
   if (lydUrl && lydUrl.startsWith('blob:')) URL.revokeObjectURL(lydUrl);
   lydUrl = null;
   gjeldendeFil = null;
+
+  // 0. Nativ adresse: appen har varig tilgang, ingen kopi nødvendig
+  if (NATIV && p.nativAdresse) {
+    lydUrl = p.nativAdresse;
+    spiller.src = p.nativAdresse;
+    $('etterSpiller').src = p.nativAdresse;
+    logg('Lyd hentet via varig filtilgang', 'ok');
+    hoppTilLagretPosisjon();
+    return true;
+  }
 
   // 1. Lagret kopi i appen
   if (p.lagretLyd) {
@@ -2564,7 +2637,7 @@ $('innDiagnose').addEventListener('change', () => {
   // rører filvelgeren. Håndtak krever brukertrykk og hentes derfor ikke her.
   if (prosjekter.length) {
     const nyeste = prosjekter[0];
-    if (nyeste.lagretLyd || (nyeste.kilde === 'url' && nyeste.url)) {
+    if (nyeste.lagretLyd || nyeste.nativAdresse || (nyeste.kilde === 'url' && nyeste.url)) {
       prosjekt = nyeste;
       $('tittelFelt').value = nyeste.tittel;
       if (nyeste.url) $('urlFelt').value = nyeste.url;
