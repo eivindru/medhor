@@ -20,6 +20,14 @@
     --lagret: #1565c0;
     --spiller: #1b5e20;
   }
+  /* Innrykk for systemfelt (statuslinje, navigasjonslinje). Settes av appen
+     via proofearInnrykk(); i nettleseren forblir de null. */
+  :root {
+    --innrykk-topp: 0px;
+    --innrykk-bunn: 0px;
+    --innrykk-venstre: 0px;
+    --innrykk-hoyre: 0px;
+  }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body {
@@ -82,7 +90,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 12px;
+    padding: calc(10px + var(--innrykk-topp)) calc(12px + var(--innrykk-hoyre))
+             10px calc(12px + var(--innrykk-venstre));
     background: var(--panel);
     position: sticky;
     top: 0;
@@ -138,7 +147,8 @@
   #kjoreBunn {
     display: flex;
     gap: 8px;
-    padding: 8px;
+    padding: 8px calc(8px + var(--innrykk-hoyre))
+             calc(8px + var(--innrykk-bunn)) calc(8px + var(--innrykk-venstre));
     background: #0c0e12;
   }
   #kjoreBunn button { flex: 1; min-height: 62px; font-size: 1.1rem; }
@@ -148,7 +158,8 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 12px;
+    padding: calc(10px + var(--innrykk-topp)) calc(12px + var(--innrykk-hoyre))
+             10px calc(12px + var(--innrykk-venstre));
     background: #0c0e12;
     font-variant-numeric: tabular-nums;
     font-size: 0.95rem;
@@ -477,7 +488,7 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v2.0';
+const VERSJON = 'v2.2';
 
 // Nettleseren gir aldri en webapp filstien. Dette API-et gir i stedet et
 // håndtak som kan lagres og gjenbrukes mot et tillatelsestrykk – finnes i
@@ -519,11 +530,34 @@ function meldNativTilstand() {
 // tilstandsmaskin som skjermtrykk og web-mediekommandoer.
 window.proofearTrykk = function () {
   logg('NATIV KOMMANDO: trykk', 'media');
+  // I bilen skal knappen alltid gjøre «det riktige»: står appen utenfor
+  // kjøremodus med et prosjekt klart, starter trykket kjøremodus selv.
+  if (visningNa !== 'kjoremodus') {
+    if (prosjekt && lydErValgt()) {
+      logg('Trykk utenfor kjøremodus – starter kjøremodus automatisk', 'ok');
+      startKjoremodus();
+    } else {
+      logg('Trykk uten lydfil – melder fra til bilskjermen', 'feil');
+      try { window.ProofearNative.visMeldingIBil('Åpne Proofear på telefonen og velg lydfil først'); } catch (e) { /* ufarlig */ }
+      return;
+    }
+  }
   nesteSteg(spiller.currentTime);
 };
 
 // Kalles av appen når siden er ferdig lastet – bekrefter at native kan nå
 // inn i siden, altså at broen virker begge veier.
+// Appen melder hvor mye plass statusfeltet og navigasjonslinjen tar, slik at
+// grensesnittet kan rykke inn i stedet for å havne under dem.
+window.proofearInnrykk = function (topp, bunn, venstre, hoyre) {
+  const r = document.documentElement.style;
+  r.setProperty('--innrykk-topp', (Number(topp) || 0) + 'px');
+  r.setProperty('--innrykk-bunn', (Number(bunn) || 0) + 'px');
+  r.setProperty('--innrykk-venstre', (Number(venstre) || 0) + 'px');
+  r.setProperty('--innrykk-hoyre', (Number(hoyre) || 0) + 'px');
+  logg('Systemfelt: topp ' + topp + ', bunn ' + bunn + ' px', 'info');
+};
+
 window.proofearKlar = function () {
   logg('Broen svarer begge veier – native kan kalle inn i siden', 'ok');
 };
@@ -2248,8 +2282,8 @@ async function tegnLagring() {
   }
 }
 
-$('knappStart').onclick = () => {
-  vekkLyd();                       // lås opp lyd mens vi har et brukertrykk
+function startKjoremodus() {
+  vekkLyd();
   spiller.playbackRate = innst.hastighet;
   // I appen tar forgrunnstjenesten over som knappemottaker
   if (NATIV) {
@@ -2259,7 +2293,9 @@ $('knappStart').onclick = () => {
   settTilstand('KLAR');
   $('stortTid').textContent = formatTid(spiller.currentTime);
   logg('Kjøremodus startet', 'ok');
-};
+}
+
+$('knappStart').onclick = startKjoremodus;
 
 $('tilInnstillinger').onclick = () => { fyllInnstillinger(); tegnLagring(); visVisning('innstillinger'); };
 $('fraInnstillinger').onclick = () => visVisning('forberedelse');
