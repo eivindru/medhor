@@ -3,308 +3,298 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#111318">
+<meta name="theme-color" content="#F2F5F2">
 <title>Proofear</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text y='52' font-size='52'>🎧</text></svg>">
 <style>
+  /* == Ett spor - design v3 ==
+     Lys, rund og vennlig som standard; moerk variant foelger telefonen.
+     Systemfont med tunge vekter i stedet for webfont - appen skal virke
+     uten nett, og medhor.html skal ikke ha eksterne avhengigheter. */
   :root {
-    --bg: #111318;
-    --panel: #1c1f26;
-    --tekst: #e8eaf0;
-    --demp: #9aa0ae;
-    --aksent: #4da3ff;
-    --ok: #3ddc84;
-    --varsel: #ffd54d;
-    --feil: #ff5c5c;
-    --lytter: #c62828;
-    --lagret: #1565c0;
-    --spiller: #1b5e20;
+    --bg:#F2F5F2; --flate:#FFFFFF; --blekk:#1C2826; --demp:#6B7A74;
+    --svak:#8A968F; --linje:#DFE7E1; --gronn:#0E9F6E; --gronnD:#0B7A55;
+    --gronnBg:#DFF0E6; --gronnFlate:#EAF4EE; --rec:#E8564A; --recD:#B4453B;
+    --recBg:#F6D9D2; --sol:#FFC63F;
+    --skygge:0 6px 18px -8px rgba(28,40,38,.18);
+    --innrykk-topp:0px; --innrykk-bunn:0px; --innrykk-venstre:0px; --innrykk-hoyre:0px;
   }
-  /* Innrykk for systemfelt (statuslinje, navigasjonslinje). Settes av appen
-     via proofearInnrykk(); i nettleseren forblir de null. */
-  :root {
-    --innrykk-topp: 0px;
-    --innrykk-bunn: 0px;
-    --innrykk-venstre: 0px;
-    --innrykk-hoyre: 0px;
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#111614; --flate:#1A211D; --blekk:#EDF3EF; --demp:#9FAFA7;
+      --svak:#7C8B84; --linje:#2A342E; --gronn:#22B27E; --gronnD:#5ED0A5;
+      --gronnBg:#1B3A2C; --rec:#EF6A59; --recD:#F49385; --recBg:#42221C;
+      --skygge:0 6px 18px -8px rgba(0,0,0,.55);
+    }
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; }
   body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--tekst);
-    font-family: system-ui, sans-serif;
-    font-size: 18px;
-    -webkit-tap-highlight-color: transparent;
+    margin: 0; background: var(--bg); color: var(--blekk);
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    font-size: 17px; line-height: 1.45;
   }
-  h1 { font-size: 1.25rem; margin: 0; }
-  h2 { font-size: 1.05rem; margin: 0 0 10px; color: var(--aksent); }
-  .versjon { color: var(--demp); font-size: 0.8rem; font-weight: 400; }
+  button, input, select, textarea { font-family: inherit; color: inherit; }
 
-  button {
-    background: #2a2f3a;
-    color: var(--tekst);
-    border: 1px solid #3a4150;
-    border-radius: 10px;
-    min-height: 56px;
-    font-size: 1.05rem;
-    padding: 8px 16px;
-    touch-action: manipulation;
-    font-family: inherit;
-  }
-  button:active { background: #3a4150; }
-  button:disabled { opacity: 0.4; }
-  button.primaer { background: #1c4d80; border-color: var(--aksent); }
-  button.fare { background: #5c1f1f; border-color: var(--feil); }
-  button.liten { min-height: 44px; font-size: 0.92rem; padding: 6px 12px; }
+  .visning { display: none; min-height: 100%; flex-direction: column;
+    padding: calc(12px + var(--innrykk-topp)) calc(16px + var(--innrykk-hoyre))
+             calc(20px + var(--innrykk-bunn)) calc(16px + var(--innrykk-venstre)); }
+  .visning.aktiv { display: flex; }
 
-  input[type="url"], input[type="text"], input[type="number"], select, textarea {
-    background: #14161c;
-    color: var(--tekst);
-    border: 1px solid #3a4150;
-    border-radius: 8px;
-    font-size: 1rem;
-    padding: 12px;
-    width: 100%;
-    font-family: inherit;
-  }
-  input[type="file"] { color: var(--demp); width: 100%; }
-  input[type="checkbox"] { width: 28px; height: 28px; flex: none; }
-  label { color: var(--demp); font-size: 0.95rem; }
-  .rad { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .felt { margin: 12px 0; }
-  .felt label { display: block; margin-bottom: 5px; }
-  .hjelp { color: var(--demp); font-size: 0.88rem; line-height: 1.45; margin: 6px 0 0; }
+  .topp { display: flex; justify-content: space-between; align-items: center; padding: 4px 0 14px; }
+  .topp .logo { font-weight: 900; font-size: 1.15rem; color: var(--gronnD); }
+  .topp .tittel { font-weight: 800; font-size: 1.1rem; }
+  .iknapp { background: none; border: none; font-size: 1.5rem; color: var(--svak);
+    padding: 4px 10px; min-height: 44px; cursor: pointer; }
 
-  /* Visninger */
-  .visning { display: none; padding: 12px 12px 40px; }
-  .visning.aktiv { display: block; }
-  section {
-    background: var(--panel);
-    border-radius: 12px;
-    padding: 14px;
-    margin: 12px 0;
-  }
-  header.topp {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: calc(10px + var(--innrykk-topp)) calc(12px + var(--innrykk-hoyre))
-             10px calc(12px + var(--innrykk-venstre));
-    background: var(--panel);
-    position: sticky;
-    top: 0;
-    z-index: 10;
-  }
+  .cta { display: block; width: 100%; background: var(--gronn); color: #fff; border: none;
+    border-radius: 18px; padding: 17px; text-align: center; font-weight: 800;
+    font-size: 1.15rem; cursor: pointer; box-shadow: 0 8px 20px -8px rgba(14,159,110,.55); }
+  .cta small { display: block; font-weight: 600; font-size: .72rem; opacity: .85; margin-top: 2px; }
+  .cta:disabled { opacity: .45; box-shadow: none; }
+  .cta.hul { background: var(--flate); color: var(--gronnD); border: 2px solid var(--gronn); box-shadow: none; }
+  .lenkeknapp { background: none; border: none; color: var(--gronnD); font-weight: 800;
+    font-size: .95rem; padding: 12px; text-align: center; width: 100%; cursor: pointer; }
+  .fare { color: var(--recD); }
 
-  /* Kjøremodus – hele skjermen er trykkflate */
-  #kjoremodus {
-    padding: 0;
-    position: fixed;
-    inset: 0;
-    display: none;
-    flex-direction: column;
-  }
-  #kjoremodus.aktiv { display: flex; }
-  #trykkflate {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 16px;
-    transition: background-color 0.15s;
-    background: #16181e;
-    user-select: none;
-  }
-  #trykkflate.spiller { background: var(--spiller); }
-  #trykkflate.lytter  { background: var(--lytter); }
-  #trykkflate.lagret  { background: var(--lagret); }
-  #stortStatus {
-    font-size: clamp(2.6rem, 15vw, 5.5rem);
-    font-weight: 800;
-    letter-spacing: 0.02em;
-    line-height: 1;
-  }
-  #stortTid {
-    font-size: clamp(2rem, 11vw, 4rem);
-    font-variant-numeric: tabular-nums;
-    font-weight: 700;
-    margin-top: 12px;
-  }
-  #stortHint { font-size: 1.05rem; margin-top: 16px; opacity: 0.85; line-height: 1.4; }
-  #liveTekst {
-    font-size: 1.15rem;
-    margin-top: 14px;
-    min-height: 2.6em;
-    max-height: 30vh;
-    overflow-y: auto;
-    line-height: 1.4;
-    opacity: 0.95;
-  }
-  #kjoreBunn {
-    display: flex;
-    gap: 8px;
-    padding: 8px calc(8px + var(--innrykk-hoyre))
-             calc(8px + var(--innrykk-bunn)) calc(8px + var(--innrykk-venstre));
-    background: #0c0e12;
-  }
-  #kjoreBunn button { flex: 1; min-height: 62px; font-size: 1.1rem; }
+  .kort { background: var(--flate); border-radius: 16px; padding: 15px 16px;
+    box-shadow: var(--skygge); margin-bottom: 12px; }
+  .kort .eti { font-size: .68rem; font-weight: 800; letter-spacing: .08em;
+    color: var(--svak); text-transform: uppercase; }
+  .kort .tit { font-weight: 800; font-size: 1.05rem; margin: 2px 0 4px; overflow-wrap: anywhere; }
+  .sma { font-size: .8rem; color: var(--svak); font-weight: 600; }
+  .frem { height: 7px; border-radius: 5px; background: var(--linje); overflow: hidden; margin: 9px 0 6px; }
+  .frem i { display: block; height: 100%; width: 0; background: var(--gronn); border-radius: 5px; }
+  .spillrund { float: right; width: 48px; height: 48px; border-radius: 50%; background: var(--gronn);
+    color: #fff; border: none; font-size: 1.15rem; margin-left: 10px; cursor: pointer; }
 
-  /* Tidslinje øverst i kjøremodus */
-  #kjoreTopp {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: calc(10px + var(--innrykk-topp)) calc(12px + var(--innrykk-hoyre))
-             10px calc(12px + var(--innrykk-venstre));
-    background: #0c0e12;
-    font-variant-numeric: tabular-nums;
-    font-size: 0.95rem;
-    color: var(--demp);
-  }
-  #kjoreTopp input[type="range"] {
-    flex: 1;
-    height: 44px;              /* stor treffflate for finger */
-    accent-color: var(--aksent);
-    background: transparent;
-    margin: 0;
-  }
-  #kjoreTopp input[type="range"]:disabled { opacity: 0.35; }
+  #hjem .blob, #oppsummering .blob { margin: 22px auto 6px; width: 112px; height: 112px; border-radius: 50%;
+    background: radial-gradient(circle at 32% 28%, var(--gronnBg), var(--flate));
+    display: flex; align-items: center; justify-content: center; gap: 4px; }
+  .blob i { width: 8px; border-radius: 4px; background: var(--gronn); display: block; }
+  #hjem .melding-hero { font-weight: 900; font-size: 1.7rem; line-height: 1.15;
+    text-align: center; margin: 12px 0 8px; }
+  #hjem .under { color: var(--demp); font-size: .92rem; text-align: center;
+    max-width: 30ch; margin: 0 auto 22px; }
+  #melding { display: none; background: var(--flate); border: 2px solid var(--sol);
+    border-radius: 14px; padding: 12px 14px; margin-bottom: 12px; font-size: .9rem; line-height: 1.5; }
+  .tipskort { display: flex; gap: 10px; background: var(--flate); border-radius: 14px;
+    padding: 12px 14px; margin-top: auto; font-size: .82rem; color: var(--svak);
+    font-weight: 600; line-height: 1.5; }
+  .urlfelt { display: none; gap: 8px; margin-top: 6px; }
+  .urlfelt.synlig { display: flex; }
+  .urlfelt input { flex: 1; min-width: 0; }
 
-  #melding {
-    display: none;
-    background: #2a1f14;
-    border: 2px solid var(--varsel);
-    border-radius: 10px;
-    padding: 12px;
-    margin: 12px;
-    line-height: 1.5;
-  }
+  input[type="url"], input[type="text"], textarea {
+    background: var(--flate); border: 1.5px solid var(--linje); border-radius: 12px;
+    font-size: 1rem; padding: 12px; width: 100%; }
+  select { background: var(--flate); border: 1.5px solid var(--linje); border-radius: 12px;
+    font-size: .95rem; padding: 10px 12px; }
+  input[type="checkbox"] { width: 26px; height: 26px; flex: none; accent-color: var(--gronn); }
 
-  /* Kommentarliste */
-  .kommentar {
-    background: #14161c;
-    border-radius: 10px;
-    padding: 11px;
-    margin-bottom: 9px;
-  }
+  .felt { margin: 4px 0 14px; }
+  .felt label { display: block; font-size: .72rem; font-weight: 800; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--svak); margin-bottom: 6px; }
+  .chips { display: flex; gap: 8px; }
+  .chip { flex: 1; border: 1.5px solid var(--linje); background: var(--flate); border-radius: 999px;
+    padding: 10px 0; font-weight: 800; font-size: .9rem; color: var(--demp); text-align: center; cursor: pointer; }
+  .chip.pa { background: var(--gronn); border-color: var(--gronn); color: #fff; }
+
+  details.mervalg { margin: 2px 0 14px; }
+  details.mervalg summary { color: var(--gronnD); font-weight: 800; font-size: .92rem;
+    cursor: pointer; padding: 8px 0; }
+  .rad { display: flex; gap: 10px; align-items: center; }
+  .hjelp { color: var(--svak); font-size: .82rem; line-height: 1.5; margin: 8px 0 0; }
+
+  #lytting { padding-left: 0; padding-right: 0; padding-bottom: 0; }
+  #kjoreTopp { display: flex; align-items: center; gap: 10px;
+    padding: 4px calc(16px + var(--innrykk-hoyre)) 6px calc(16px + var(--innrykk-venstre));
+    font-size: .8rem; color: var(--svak); font-weight: 700; font-variant-numeric: tabular-nums; }
+  #kjoreTopp input[type="range"] { flex: 1; height: 44px; accent-color: var(--gronn); margin: 0; background: transparent; border: none; padding: 0; }
+  #kjoreTopp input[type="range"]:disabled { opacity: .35; }
+  #trykkflate { flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; text-align: center; margin: 0 16px; padding: 18px 16px;
+    border-radius: 24px; background: var(--flate); transition: background .2s; user-select: none; min-height: 0; }
+  #trykkflate.spiller, #trykkflate.lagret { background: var(--gronnBg); }
+  #trykkflate.lytter { background: var(--recBg); }
+  #stortStatus { font-weight: 900; font-size: .95rem; letter-spacing: .14em; color: var(--gronnD); }
+  #trykkflate.lytter #stortStatus, #trykkflate.lytter #stortTid, #trykkflate.lytter #stortHint { color: var(--recD); }
+  #stortTid { font-weight: 900; font-size: clamp(3rem, 16vw, 4.4rem); letter-spacing: -.02em;
+    line-height: 1.05; margin: 2px 0 4px; font-variant-numeric: tabular-nums; }
+  #stortHint { font-size: .92rem; font-weight: 700; color: var(--demp); }
+  #liveTekst { font-size: .98rem; font-weight: 700; background: var(--flate);
+    border-radius: 14px; padding: 10px 14px; margin-top: 14px; max-width: 94%;
+    max-height: 26vh; overflow-y: auto; line-height: 1.45; }
+  #liveTekst:empty { display: none; }
+  #knappNotat { width: 92px; height: 92px; border-radius: 50%; border: none; background: var(--gronn);
+    color: #fff; font-weight: 900; font-size: .72rem; letter-spacing: .06em; cursor: pointer;
+    box-shadow: 0 12px 26px -10px rgba(14,159,110,.6); margin-top: 20px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+  #knappNotat .mik { font-size: 1.7rem; line-height: 1; }
+  #trykkflate.lytter #knappNotat { background: var(--rec); box-shadow: 0 12px 26px -10px rgba(232,86,74,.6); }
+  #knappSlettSiste { background: none; border: none; color: var(--recD); font-weight: 800;
+    font-size: .9rem; margin-top: 14px; padding: 8px 14px; cursor: pointer; }
+  #kjoreBunn { display: flex; gap: 8px;
+    padding: 10px calc(16px + var(--innrykk-hoyre)) 10px calc(16px + var(--innrykk-venstre)); }
+  #kjoreBunn button { flex: 1; min-height: 58px; background: var(--flate); border: none;
+    border-radius: 14px; font-weight: 900; font-size: .98rem; box-shadow: var(--skygge); cursor: pointer; }
+  #notatHandtak { margin: 0 16px; background: var(--flate); border-radius: 16px 16px 0 0;
+    padding: 12px 18px calc(12px + var(--innrykk-bunn)); display: flex; justify-content: space-between;
+    font-weight: 800; font-size: .92rem; box-shadow: var(--skygge); cursor: pointer; }
+  #notatHandtak span { color: var(--gronnD); }
+
+  .ark-bak { display: none; position: fixed; inset: 0; background: rgba(16,24,20,.45); z-index: 40; }
+  .ark-bak.synlig { display: block; }
+  .ark { position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; background: var(--bg);
+    border-radius: 22px 22px 0 0; padding: 10px 18px calc(18px + var(--innrykk-bunn));
+    max-height: 78vh; display: none; flex-direction: column; box-shadow: 0 -12px 40px rgba(0,0,0,.3); }
+  .ark.synlig { display: flex; }
+  .ark .grip { width: 40px; height: 5px; border-radius: 3px; background: var(--linje); margin: 2px auto 12px; flex: none; }
+  .ark h3 { margin: 0 0 10px; font-size: 1rem; font-weight: 800; }
+  .ark .rull { overflow-y: auto; min-height: 0; }
+
+  .notatrad { display: flex; gap: 10px; padding: 11px 2px; border-bottom: 1px solid var(--linje);
+    font-size: .9rem; line-height: 1.45; align-items: baseline; }
+  .notatrad:last-child { border-bottom: none; }
+  .tkknapp { font-weight: 900; color: var(--gronnD); flex: none; background: none; border: none;
+    font-size: .88rem; padding: 0; cursor: pointer; font-variant-numeric: tabular-nums; }
+
+  .delvalg { display: flex; align-items: center; gap: 12px; background: var(--flate);
+    border: none; width: 100%; text-align: left; border-radius: 14px; padding: 14px;
+    margin-bottom: 10px; box-shadow: var(--skygge); font-weight: 800; font-size: .98rem; cursor: pointer; }
+  .delvalg i { width: 38px; height: 38px; border-radius: 11px; background: var(--gronnBg);
+    display: flex; align-items: center; justify-content: center; font-style: normal; flex: none; }
+  .delvalg small { display: block; font-weight: 600; font-size: .75rem; color: var(--svak); }
+
+  #csvForhaand { font-family: ui-monospace, Consolas, monospace; font-size: .72rem;
+    background: var(--flate); border-radius: 10px; padding: 10px; max-height: 130px;
+    overflow: auto; white-space: pre; margin-top: 8px; }
+
+  #oppsTittel { font-weight: 900; font-size: 1.4rem; text-align: center; line-height: 1.2; margin: 8px 0 16px; }
+  .listekort { background: var(--flate); border-radius: 14px; padding: 4px 14px; box-shadow: var(--skygge); }
+
+  .bibkort { width: 100%; text-align: left; background: var(--flate); border: none;
+    border-radius: 16px; padding: 14px 16px; box-shadow: var(--skygge); margin-bottom: 12px;
+    cursor: pointer; color: inherit; font-size: 1rem; }
+  #pTittel { font-weight: 900; font-size: 1.45rem; line-height: 1.2; margin: 4px 0; overflow-wrap: anywhere; }
+  #pMeta { color: var(--svak); font-size: .85rem; font-weight: 600; margin-bottom: 14px; }
+  #etterSpiller { width: 100%; margin: 10px 0 4px; }
+  .kommentar { background: var(--flate); border-radius: 14px; padding: 12px 14px;
+    margin-bottom: 10px; box-shadow: var(--skygge); }
   .kommentar .topplinje { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-  .kommentar .tidskode {
-    background: #1c4d80;
-    border-color: var(--aksent);
-    min-height: 40px;
-    padding: 5px 12px;
-    font-variant-numeric: tabular-nums;
-    font-size: 0.98rem;
-  }
-  .kommentar .merke { color: var(--varsel); font-size: 0.85rem; }
-  .kommentar .tekst { line-height: 1.45; margin-bottom: 8px; white-space: pre-wrap; }
+  .kommentar .tidskode { background: var(--gronnBg); color: var(--gronnD); border: none;
+    border-radius: 9px; min-height: 38px; padding: 5px 12px; font-weight: 900;
+    font-variant-numeric: tabular-nums; font-size: .88rem; cursor: pointer; }
+  .kommentar .merke { color: #B08A1E; font-size: .75rem; font-weight: 700; }
+  .kommentar .tekst { line-height: 1.45; margin-bottom: 8px; white-space: pre-wrap; font-size: .95rem; }
   .kommentar .verktoy { display: flex; gap: 6px; flex-wrap: wrap; }
+  .liten { background: var(--bg); border: 1.5px solid var(--linje); border-radius: 10px;
+    min-height: 40px; font-size: .85rem; font-weight: 700; padding: 6px 12px; cursor: pointer; }
+  .liten.primaer { background: var(--gronn); border-color: var(--gronn); color: #fff; }
+  .liten.fare { color: var(--recD); border-color: var(--recBg); }
+  .tom { color: var(--svak); text-align: center; padding: 26px 12px; line-height: 1.5; font-weight: 600; }
 
-  .prosjekt {
-    background: #14161c;
-    border-radius: 10px;
-    padding: 12px;
-    margin-bottom: 8px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-  }
-  .prosjekt.aktiv { border: 2px solid var(--aksent); }
+  .settrad { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    background: var(--flate); border-radius: 14px; padding: 13px 15px; margin-bottom: 10px;
+    box-shadow: var(--skygge); font-weight: 700; font-size: .95rem; }
+  .settrad .beskr small { display: block; color: var(--svak); font-weight: 600; font-size: .77rem; margin-top: 1px; }
+  .settrad select { max-width: 46%; }
+  #logg { font-family: ui-monospace, Consolas, monospace; font-size: .78rem; line-height: 1.5;
+    max-height: 40vh; overflow-y: auto; background: var(--flate); border-radius: 10px; padding: 8px; }
+  #logg div { border-bottom: 1px solid var(--linje); padding: 2px 0; }
+  #logg .klokke { color: var(--svak); margin-right: 6px; }
+  #logg .media { color: #B08A1E; font-weight: 700; }
+  #logg .ok { color: var(--gronnD); }
+  #logg .feil { color: var(--recD); font-weight: 700; }
+  #logg .info { color: var(--blekk); }
+  #lagringTotal, #lagringListe { font-size: .85rem; }
+  .prosjekt { background: var(--flate); border-radius: 12px; padding: 11px 13px; margin-bottom: 8px;
+    display: flex; justify-content: space-between; align-items: center; gap: 10px; box-shadow: var(--skygge); }
   .prosjekt .info { flex: 1; min-width: 0; }
-  .prosjekt .navn { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .prosjekt .under { color: var(--demp); font-size: 0.85rem; margin-top: 2px; }
+  .prosjekt .navn { font-weight: 800; font-size: .92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prosjekt .under { color: var(--svak); font-size: .78rem; margin-top: 2px; }
 
-  /* Logg */
-  #logg {
-    font-family: ui-monospace, Consolas, monospace;
-    font-size: 0.9rem;
-    line-height: 1.5;
-    max-height: 40vh;
-    overflow-y: auto;
-    background: #14161c;
-    border-radius: 8px;
-    padding: 8px;
-  }
-  #logg div { border-bottom: 1px solid #22262f; padding: 2px 0; }
-  #logg .klokke { color: var(--demp); margin-right: 6px; }
-  #logg .media { color: var(--varsel); font-weight: 700; }
-  #logg .ok { color: var(--ok); }
-  #logg .feil { color: var(--feil); font-weight: 700; }
-  #logg .info { color: var(--tekst); }
-
-  #csvForhaand {
-    font-family: ui-monospace, Consolas, monospace;
-    font-size: 0.85rem;
-    background: #14161c;
-    border-radius: 8px;
-    padding: 10px;
-    max-height: 200px;
-    overflow: auto;
-    white-space: pre;
-  }
-  .tom { color: var(--demp); text-align: center; padding: 24px 12px; line-height: 1.5; }
+  #micPrime { position: fixed; inset: 0; z-index: 50; background: var(--bg); display: none;
+    flex-direction: column; padding: calc(20px + var(--innrykk-topp)) 22px calc(24px + var(--innrykk-bunn)); }
+  #micPrime.synlig { display: flex; }
+  #micPrime .midt { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: center; }
+  #micPrime .ikon { font-size: 3rem; margin-bottom: 12px; }
+  #micPrime h2 { font-weight: 900; font-size: 1.4rem; line-height: 1.2; margin: 0 0 10px; }
+  #micPrime p { color: var(--demp); font-size: .95rem; max-width: 32ch; margin: 0 auto; }
 </style>
 </head>
 <body>
 
-<!-- ══════════ FORBEREDELSE ══════════ -->
-<div class="visning aktiv" id="forberedelse">
-  <header class="topp">
-    <h1>Proofear <span class="versjon" id="versjon"></span></h1>
-    <button class="liten" id="tilInnstillinger">⚙ Innstillinger</button>
-  </header>
+<!-- ========== HJEM ========== -->
+<div class="visning aktiv" id="hjem">
+  <div class="topp">
+    <span class="logo">Proofear <span class="sma" id="versjon"></span></span>
+    <button class="iknapp" id="tilInnstillinger" aria-label="Innstillinger">&#8943;</button>
+  </div>
   <div id="melding"></div>
 
-  <section>
-    <h2>Aktivt prosjekt</h2>
-    <div id="aktivtProsjekt" class="tom">Ingen prosjekter ennå.</div>
-    <div class="felt">
-      <label for="filVelger">Lydfil fra telefonen</label>
-      <input type="file" id="filVelger" accept="audio/*">
-      <button id="knappNativFil" class="primaer" style="display:none;width:100%">📂 Velg lydfil</button>
-      <button id="knappHandtak" class="liten" style="display:none;margin-top:8px">📂 Velg fil som huskes</button>
-    </div>
-    <div class="felt">
-      <label for="urlFelt">…eller lydfil fra en nettadresse</label>
-      <div class="rad">
-        <input type="url" id="urlFelt" placeholder="https://…" inputmode="url" style="flex:1;min-width:0">
-        <button id="knappLastUrl" class="liten">Hent</button>
-      </div>
-    </div>
+  <div id="aktivtProsjekt"></div>
 
-    <div class="rad felt">
-      <input type="checkbox" id="lagreLyd" disabled>
-      <label for="lagreLyd">Lagre lydfilen i appen, så den er klar neste gang</label>
-    </div>
-    <div id="lagreLydInfo" class="hjelp"></div>
+  <div id="hjemHero">
+    <div class="blob"><i style="height:26px"></i><i style="height:48px"></i><i style="height:70px"></i><i style="height:40px"></i><i style="height:58px"></i><i style="height:22px"></i></div>
+    <div class="melding-hero">Lytt. Snakk.<br>Ferdig notert.</div>
+    <div class="under">Proofear skriver ned det du sier mens du lytter &ndash; festet til riktig sted i lyden.</div>
+  </div>
 
-    <div class="felt">
-      <label for="tittelFelt">Tittel (brukes i CSV-eksporten)</label>
-      <input type="text" id="tittelFelt" placeholder="F.eks. Kiosk #5 Solli plass">
-    </div>
-    <button id="knappStart" class="primaer" style="width:100%" disabled>▶ Start kjøremodus</button>
-    <p class="hjelp" id="hjelpLagring">Kommentarene lagres fortløpende og overlever at appen lukkes.
-      Lydfilen huskes bare hvis du krysser av over – nettleseren får nemlig aldri
-      vite hvor filen ligger på telefonen, så appen må ta en egen kopi.</p>
-  </section>
+  <button class="cta" id="knappVelgLyd">Velg lydfil<small>MP3, WAV, lydbok, forelesning &hellip;</small></button>
+  <input type="file" id="filVelger" accept="audio/*" style="display:none">
+  <button class="liten" id="knappNativFil" style="display:none">&#128194;</button>
+  <button class="liten" id="knappHandtak" style="display:none">&#128194; Velg fil som huskes</button>
 
-  <section>
-    <h2>Prosjekter</h2>
-    <div id="prosjektListe"></div>
-  </section>
+  <button class="lenkeknapp" id="visUrl">Hent fra nettadresse &rsaquo;</button>
+  <div class="urlfelt" id="urlBoks">
+    <input type="url" id="urlFelt" placeholder="https://&hellip;" inputmode="url">
+    <button class="liten" id="knappLastUrl">Hent</button>
+  </div>
 
-  <section>
-    <button id="tilEtterarbeid" style="width:100%">📝 Se og eksporter kommentarer</button>
-  </section>
+  <button class="lenkeknapp" id="tilEtterarbeid">Alle lyttinger &rsaquo;</button>
+
+  <div class="tipskort"><span>&#128161;</span><span>Knappen p&aring; hodetelefonene og rattknappene i bilen
+    virker som notat-knapp mens du lytter.</span></div>
 </div>
 
-<!-- ══════════ KJØREMODUS ══════════ -->
-<div class="visning" id="kjoremodus">
+<!-- ========== GJOER KLAR ========== -->
+<div class="visning" id="klargjor">
+  <div class="topp">
+    <span class="tittel">Gj&oslash;r klar</span>
+    <button class="iknapp" id="fraKlargjor" aria-label="Lukk">&#10005;</button>
+  </div>
+  <div class="kort">
+    <div class="eti">Valgt lyd</div>
+    <div class="tit" id="klargjorFilnavn">&ndash;</div>
+    <div class="sma" id="klargjorMeta"></div>
+  </div>
+  <div class="felt">
+    <label for="tittelFelt">Navn p&aring; lyttingen</label>
+    <input type="text" id="tittelFelt" placeholder="F.eks. Kapittel 3 &ndash; utkast">
+  </div>
+  <div class="felt">
+    <label>Hastighet</label>
+    <div class="chips" id="chipsHastighet">
+      <button class="chip" data-h="1">1&times;</button>
+      <button class="chip" data-h="1.25">1,25&times;</button>
+      <button class="chip" data-h="1.5">1,5&times;</button>
+    </div>
+  </div>
+  <details class="mervalg">
+    <summary>Flere valg</summary>
+    <div class="rad" id="lagreLydRad" style="margin:8px 0 4px">
+      <input type="checkbox" id="lagreLyd" disabled>
+      <label for="lagreLyd" style="font-size:.9rem;font-weight:700">Lagre lydfilen i appen</label>
+    </div>
+    <div class="hjelp" id="lagreLydInfo"></div>
+    <p class="hjelp" id="hjelpLagring">Notatene lagres fortl&oslash;pende og overlever at appen lukkes.</p>
+  </details>
+  <button class="cta" id="knappStart" style="margin-top:auto" disabled>Start lytting</button>
+</div>
+
+<!-- ========== LYTTING ========== -->
+<div class="visning" id="lytting">
   <div id="kjoreTopp">
     <span id="scrubNa">00:00</span>
     <input type="range" id="scrubber" min="0" max="0" step="0.1" value="0">
@@ -313,172 +303,139 @@
   <div id="trykkflate">
     <div id="stortStatus">KLAR</div>
     <div id="stortTid">00:00</div>
-    <div id="stortHint">Trykk hvor som helst for å starte</div>
+    <div id="stortHint">Trykk hvor som helst for &aring; starte</div>
+    <button id="knappNotat"><span class="mik">&#127908;</span><span id="knappNotatTekst">NOTAT</span></button>
     <div id="liveTekst"></div>
-    <button id="knappSlettSiste" class="fare" style="display:none;margin-top:16px">🗑 Slett siste kommentar</button>
+    <button id="knappSlettSiste" style="display:none">&#128465; Slett siste notat</button>
   </div>
   <div id="kjoreBunn">
-    <button id="knappSpolTilbake">⏪ <span class="spolTall">5</span></button>
-    <button id="knappAvslutt">■ Avslutt</button>
-    <button id="knappSpolFram">⏩ <span class="spolTall">5</span></button>
+    <button id="knappSpolTilbake">&laquo; <span class="spolTall">5</span></button>
+    <button id="knappAvslutt">&#9632; Avslutt</button>
+    <button id="knappSpolFram"><span class="spolTall">5</span> &raquo;</button>
   </div>
+  <div id="notatHandtak">Notater<span id="notatTeller">0</span></div>
 </div>
 
-<!-- ══════════ ETTERARBEID ══════════ -->
-<div class="visning" id="etterarbeid">
-  <header class="topp">
-    <h1>Kommentarer</h1>
-    <button class="liten" id="fraEtterarbeid">← Tilbake</button>
-  </header>
-
-  <section>
-    <div class="rad">
-      <audio id="etterSpiller" controls style="width:100%"></audio>
-    </div>
-    <p class="hjelp">Har du valgt lydfil, hopper trykk på en tidskode rett dit.</p>
-  </section>
-
-  <section>
-    <h2>Liste</h2>
-    <div id="kommentarListe"></div>
-  </section>
-
-  <section>
-    <h2>Eksport til CSV</h2>
-    <div class="felt">
-      <label for="csvFormat">Tidskodeformat</label>
-      <select id="csvFormat">
-        <option value="HHMMSSFF">HH:MM:SS:FF (rammer – Frame.io)</option>
-        <option value="HHMMSSmmm">HH:MM:SS.mmm (millisekunder)</option>
-        <option value="MMSS">MM:SS (enkel)</option>
-      </select>
-    </div>
-    <div id="csvForhaand">Ingen kommentarer å vise.</div>
-    <div class="rad" style="margin-top:10px">
-      <button id="knappDelCsv" class="primaer" style="flex:1">📤 Del CSV</button>
-      <button id="knappLastCsv" style="flex:1">⬇ Last ned CSV</button>
-    </div>
-  </section>
+<!-- ========== OPPSUMMERING ========== -->
+<div class="visning" id="oppsummering">
+  <div class="topp"><span class="logo">Proofear</span><span></span></div>
+  <div class="blob"><i style="height:20px"></i><i style="height:40px"></i><i style="height:28px"></i></div>
+  <div id="oppsTittel">Bra jobba!</div>
+  <div class="listekort" id="oppsListe"></div>
+  <button class="lenkeknapp" id="oppsAlle">Se alle notatene &rsaquo;</button>
+  <button class="cta" id="knappDelFraOpps" style="margin-top:auto">Del notatene</button>
+  <button class="lenkeknapp" id="knappFerdig">Ferdig &ndash; lagre og lukk</button>
 </div>
 
-<!-- ══════════ INNSTILLINGER ══════════ -->
+<!-- ========== ALLE LYTTINGER ========== -->
+<div class="visning" id="bibliotek">
+  <div class="topp">
+    <button class="iknapp" id="fraEtterarbeid" aria-label="Tilbake">&lsaquo;</button>
+    <span class="tittel">Alle lyttinger</span>
+    <span style="width:44px"></span>
+  </div>
+  <div id="prosjektListe"></div>
+  <button class="cta hul" id="knappNyFraBib" style="margin-top:auto">Velg ny lydfil</button>
+</div>
+
+<!-- ========== PROSJEKTSIDE ========== -->
+<div class="visning" id="prosjektside">
+  <div class="topp">
+    <button class="iknapp" id="fraProsjekt" aria-label="Tilbake">&lsaquo;</button>
+    <span></span>
+    <button class="iknapp fare" id="knappSlettProsjekt" aria-label="Slett">&#128465;</button>
+  </div>
+  <div id="pTittel">&ndash;</div>
+  <div id="pMeta"></div>
+  <button class="cta" id="knappFortsett">&#9654; Fortsett lyttingen</button>
+  <button class="cta hul" id="knappDelProsjekt" style="margin-top:10px">Del notatene</button>
+  <audio id="etterSpiller" controls preload="metadata"></audio>
+  <div id="kommentarListe" style="margin-top:12px"></div>
+</div>
+
+<!-- ========== INNSTILLINGER ========== -->
 <div class="visning" id="innstillinger">
-  <header class="topp">
-    <h1>Innstillinger</h1>
-    <button class="liten" id="fraInnstillinger">← Tilbake</button>
-  </header>
+  <div class="topp">
+    <button class="iknapp" id="fraInnstillinger" aria-label="Tilbake">&lsaquo;</button>
+    <span class="tittel">Innstillinger</span>
+    <span style="width:44px"></span>
+  </div>
+  <div class="settrad"><span class="beskr">Lydsignal ved notat<small>pip n&aring;r lyttingen starter og stopper</small></span>
+    <input type="checkbox" id="innPip"></div>
+  <div class="settrad"><span class="beskr">Knappetrykkene<small>tre trykk gir pause etter lagring; to trykk fortsetter selv</small></span>
+    <select id="innSyklus"><option value="tredelt">Tre trykk</option><option value="todelt">To trykk</option></select></div>
+  <div class="settrad"><span class="beskr">Spolelengde<small>hvor langt &laquo; og &raquo; hopper</small></span>
+    <select id="innSpolLengde"><option value="3">3 sek</option><option value="5">5 sek</option><option value="10">10 sek</option><option value="15">15 sek</option></select></div>
+  <div class="settrad"><span class="beskr">Spr&aring;k for diktering</span>
+    <select id="innSprak"><option value="nb-NO">Norsk bokm&aring;l</option><option value="nn-NO">Norsk nynorsk</option><option value="en-US">Engelsk</option></select></div>
 
-  <section>
-    <h2>Knappekart</h2>
-    <div class="felt">
-      <label for="innKnappeoppsett">Hva rattknappene gjør</label>
-      <select id="innKnappeoppsett"></select>
-      <p class="hjelp" id="oppsettForklaring"></p>
-    </div>
-    <div class="felt">
-      <label for="innDobbelVindu">Dobbeltklikkvindu: <span id="visDobbelVindu"></span> ms</label>
-      <input type="range" id="innDobbelVindu" min="200" max="800" step="50" style="width:100%">
-      <p class="hjelp">Gjelder bare oppsett som bruker dobbeltklikk. Kortere vindu gir
-        raskere respons, men krever raskere dobbeltklikk.</p>
-    </div>
-  </section>
+  <details class="mervalg">
+    <summary>Avansert</summary>
+    <div class="settrad"><span class="beskr">Hastighet<small>styres ogs&aring; fra Gj&oslash;r klar-siden</small></span>
+      <select id="innHastighet"><option value="1">1,0&times;</option><option value="1.25">1,25&times;</option><option value="1.5">1,5&times;</option></select></div>
+    <div class="settrad" style="flex-wrap:wrap"><span class="beskr">Knappeoppsett<small id="oppsettForklaring"></small></span>
+      <select id="innKnappeoppsett" style="max-width:100%"></select></div>
+    <div class="settrad"><span class="beskr">Dobbeltklikkvindu<small><span id="visDobbelVindu"></span> ms</small></span>
+      <input type="range" id="innDobbelVindu" min="200" max="800" step="50" style="width:44%"></div>
+    <div class="settrad"><span class="beskr">Lydopptak av notater<small>reserve n&aring;r dikteringen svikter</small></span>
+      <select id="innBackupModus"><option value="vedBehov">Ved behov</option><option value="alltid">Alltid</option><option value="av">Av</option></select></div>
+    <div class="settrad"><span class="beskr">Bilder per sekund<small>for HH:MM:SS:FF-tidskoder</small></span>
+      <select id="innFps"><option value="24">24</option><option value="25">25</option><option value="30">30</option></select></div>
+    <div style="margin:14px 2px 4px" class="sma">LAGRING</div>
+    <div id="lagringTotal" class="hjelp">Henter &hellip;</div>
+    <div id="lagringListe" style="margin-top:8px"></div>
+  </details>
 
-  <section>
-    <h2>Avspilling</h2>
-    <div class="felt">
-      <label for="innSpolLengde">Spolelengde</label>
-      <select id="innSpolLengde">
-        <option value="3">3 sekunder</option>
-        <option value="5">5 sekunder</option>
-        <option value="10">10 sekunder</option>
-        <option value="15">15 sekunder</option>
-      </select>
-    </div>
-    <div class="felt">
-      <label for="innHastighet">Hastighet</label>
-      <select id="innHastighet">
-        <option value="1">1,0×</option>
-        <option value="1.25">1,25×</option>
-        <option value="1.5">1,5×</option>
-      </select>
-    </div>
-  </section>
-
-  <section>
-    <h2>Kommentarer</h2>
-    <div class="rad felt">
-      <input type="checkbox" id="innPip">
-      <label for="innPip">Lydsignaler (pip) ved start og stopp av lytting</label>
-    </div>
-    <div class="felt">
-      <label for="innSyklus">Hva knappen gjør</label>
-      <select id="innSyklus">
-        <option value="tredelt">Tre trykk: pause og lytt → lagre → fortsett</option>
-        <option value="todelt">To trykk: pause og lytt → lagre og fortsett med én gang</option>
-      </select>
-      <p class="hjelp">Med to trykk starter avspillingen automatisk i det kommentaren
-        lagres. Teksten gjør seg ferdig i bakgrunnen, så slutten mistes ikke.
-        Slett-knappen vises da en kort stund mens lyden går igjen.</p>
-    </div>
-
-    <div class="felt">
-      <label for="innBackupModus">Lydopptak av kommentarer (sikkerhetskopi)</label>
-      <select id="innBackupModus">
-        <option value="vedBehov">Ved behov – kun når dikteringen svikter (anbefalt)</option>
-        <option value="alltid">Alltid – slår av diktering, kun opptak</option>
-        <option value="av">Av – aldri opptak</option>
-      </select>
-      <p class="hjelp">Telefonen gir bare én mottaker mikrofonlyd om gangen, så samtidig
-        diktering og opptak er ikke mulig. Med «Ved behov» eier dikteringen mikrofonen,
-        og opptaket rykker inn for resten av kommentaren hvis den svikter.</p>
-    </div>
-    <div class="felt">
-      <label for="innSprak">Språk for talegjenkjenning</label>
-      <select id="innSprak">
-        <option value="nb-NO">Norsk bokmål (nb-NO)</option>
-        <option value="nn-NO">Norsk nynorsk (nn-NO)</option>
-        <option value="en-US">Engelsk (en-US)</option>
-      </select>
-    </div>
-  </section>
-
-  <section>
-    <h2>Tidskode</h2>
-    <div class="felt">
-      <label for="innFps">Bilder per sekund (for HH:MM:SS:FF)</label>
-      <select id="innFps">
-        <option value="24">24 fps</option>
-        <option value="25">25 fps</option>
-        <option value="30">30 fps</option>
-      </select>
-    </div>
-  </section>
-
-  <section>
-    <h2>Lagring</h2>
-    <div id="lagringTotal" class="hjelp">Henter …</div>
-    <div id="lagringListe" style="margin-top:10px"></div>
-    <p class="hjelp">Å fjerne lyden fra et prosjekt sletter <em>ikke</em> kommentarene –
-      du må bare velge lydfilen på nytt hvis du skal høre den igjen.</p>
-  </section>
-
-  <section>
-    <h2>Diagnose</h2>
-    <div class="rad felt">
+  <details class="mervalg">
+    <summary>Diagnose</summary>
+    <div class="rad" style="margin:8px 0">
       <input type="checkbox" id="innDiagnose">
-      <label for="innDiagnose">Vis diagnoselogg (til feilsøking i bil)</label>
+      <label for="innDiagnose" style="font-weight:700;font-size:.9rem">Vis diagnoselogg</label>
     </div>
     <div id="diagnosePanel" style="display:none">
       <div id="logg"></div>
-      <div class="rad" style="margin-top:8px">
-        <button class="liten" id="kopierLogg">📋 Kopier logg</button>
-        <button class="liten" id="tomLogg">Tøm logg</button>
-        <button class="liten" id="knappMicTest">🧪 Test mikrofondeling</button>
+      <div class="rad" style="margin-top:8px;flex-wrap:wrap">
+        <button class="liten" id="kopierLogg">&#128203; Kopier logg</button>
+        <button class="liten" id="tomLogg">T&oslash;m logg</button>
+        <button class="liten" id="knappMicTest">&#129514; Test mikrofondeling</button>
       </div>
-      <p class="hjelp">Mikrofontesten sjekker om diktering og opptak kan dele mikrofonen
-        på denne telefonen. Snakk sammenhengende i ca. 15 sekunder mens den kjører.</p>
     </div>
-  </section>
+  </details>
+</div>
+
+<!-- ========== OVERLEGG ========== -->
+<div class="ark-bak" id="arkBak"></div>
+
+<div class="ark" id="notatArk">
+  <div class="grip"></div>
+  <h3>Notater &middot; <span id="notatArkAntall">0</span></h3>
+  <div class="rull" id="notatArkListe"></div>
+</div>
+
+<div class="ark" id="delArk">
+  <div class="grip"></div>
+  <h3>Del notatene</h3>
+  <div class="rull">
+    <button class="delvalg" id="knappDelTekst"><i>&#128172;</i><span>Som tekst<small>lim inn hvor som helst</small></span></button>
+    <button class="delvalg" id="knappDelCsv"><i>&#128202;</i><span>Regneark (CSV)<small>Excel, Google Sheets</small></span></button>
+    <button class="delvalg" id="knappDelFrameio"><i>&#127916;</i><span>Frame.io<small>CSV med tidskoder HH:MM:SS:FF</small></span></button>
+    <details class="mervalg">
+      <summary>Tilpass formatet</summary>
+      <div class="settrad"><span class="beskr">Tidskodeformat i regneark-CSV</span>
+        <select id="csvFormat"><option value="HHMMSSFF">HH:MM:SS:FF</option><option value="HHMMSSmmm">HH:MM:SS.mmm</option><option value="MMSS">MM:SS</option></select></div>
+      <div id="csvForhaand">&ndash;</div>
+      <button class="lenkeknapp" id="knappLastCsv">Last ned CSV-fil i stedet</button>
+    </details>
+  </div>
+</div>
+
+<div id="micPrime">
+  <div class="midt">
+    <div class="ikon">&#127908;</div>
+    <h2>Notatene lages av stemmen din</h2>
+    <p>Derfor sp&oslash;r vi om mikrofonen i neste steg. Den brukes bare n&aring;r du snakker inn et notat &ndash; aldri ellers.</p>
+  </div>
+  <button class="cta" id="knappPrimeOk">Greit, fortsett</button>
 </div>
 
 <script>
@@ -488,7 +445,7 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v2.2';
+const VERSJON = 'v3.0';
 
 // Nettleseren gir aldri en webapp filstien. Dette API-et gir i stedet et
 // håndtak som kan lagres og gjenbrukes mot et tillatelsestrykk – finnes i
@@ -532,7 +489,7 @@ window.proofearTrykk = function () {
   logg('NATIV KOMMANDO: trykk', 'media');
   // I bilen skal knappen alltid gjøre «det riktige»: står appen utenfor
   // kjøremodus med et prosjekt klart, starter trykket kjøremodus selv.
-  if (visningNa !== 'kjoremodus') {
+  if (visningNa !== 'lytting') {
     if (prosjekt && lydErValgt()) {
       logg('Trykk utenfor kjøremodus – starter kjøremodus automatisk', 'ok');
       startKjoremodus();
@@ -604,6 +561,7 @@ window.proofearFilValgt = async function (adresse, navn, storrelse) {
   visAktivtProsjekt();
   oppdaterStartKnapp();
   oppdaterLagreLydBoks();
+  visKlargjor();
 };
 
 window.proofearFilFeilet = function (grunn) {
@@ -707,6 +665,7 @@ const STANDARD = {
   pip: true,
   backupModus: 'vedBehov',   // vedBehov | alltid | av
   syklus: 'tredelt',         // tredelt | todelt (se avsluttKommentar)
+  micPrimet: false,          // har brukeren sett mikrofon-forklaringen?
   sprak: 'nb-NO',
   diagnose: false
 };
@@ -874,108 +833,80 @@ function tegnProsjektListe() {
   const el = $('prosjektListe');
   el.innerHTML = '';
   if (!prosjekter.length) {
-    el.innerHTML = '<div class="tom">Ingen prosjekter ennå. Velg en lydfil for å lage det første.</div>';
+    el.innerHTML = '<div class="tom">Ingen lyttinger ennå. Velg en lydfil for å komme i gang.</div>';
     return;
   }
   for (const p of prosjekter) {
-    const rad = document.createElement('div');
-    rad.className = 'prosjekt' + (prosjekt && p.id === prosjekt.id ? ' aktiv' : '');
-    const info = document.createElement('div');
-    info.className = 'info';
-    const navn = document.createElement('div');
-    navn.className = 'navn';
-    navn.textContent = p.tittel;
-    const under = document.createElement('div');
-    under.className = 'under';
-    // Filnavn og størrelse vises fordi duplikater ellers ser identiske ut
+    const kort = document.createElement('button');
+    kort.className = 'bibkort';
+    const tit = document.createElement('div');
+    tit.style.fontWeight = '800';
+    tit.textContent = p.tittel;
     const merker = [];
-    if (p.nativAdresse) merker.push('🔗 husket');
+    if (p.nativAdresse || p.harHandtak) merker.push('🔗 huskes');
     else if (p.lagretLyd) merker.push('💾 lagret');
-    else if (p.harHandtak) merker.push('🔗 husket');
     else if (p.kilde === 'url') merker.push('🌐 nettadresse');
-    under.textContent = p.filnavn +
+    const meta = document.createElement('div');
+    meta.className = 'sma';
+    meta.style.marginTop = '3px';
+    meta.textContent = p.kommentarer.length + ' notater · ' +
+      new Date(p.opprettet).toLocaleDateString('nb-NO') +
       (p.filStorrelse ? ' · ' + formatBytes(p.filStorrelse) : '') +
       (merker.length ? ' · ' + merker.join(' ') : '');
-    const under2 = document.createElement('div');
-    under2.className = 'under';
-    under2.textContent = p.kommentarer.length + ' kommentarer · ' +
-      new Date(p.opprettet).toLocaleDateString('nb-NO');
-    info.append(navn, under, under2);
-
-    const velg = document.createElement('button');
-    velg.className = 'liten';
-    velg.textContent = prosjekt && p.id === prosjekt.id ? 'Aktivt' : 'Velg';
-    velg.disabled = !!(prosjekt && p.id === prosjekt.id);
-    velg.onclick = async () => {
-      prosjekt = p;
-      $('tittelFelt').value = p.tittel;
-      if (p.kilde === 'url' && p.url) $('urlFelt').value = p.url;
-      logg('Byttet til prosjekt: ' + p.tittel, 'ok');
-      // Knappetrykket er brukergesten et eventuelt tillatelsesspørsmål trenger
-      await hentLydForProsjekt(p, true);
-      tegnProsjektListe();
-      visAktivtProsjekt();
-      oppdaterStartKnapp();
-      oppdaterLagreLydBoks();
-    };
-
-    const slett = document.createElement('button');
-    slett.className = 'liten fare';
-    slett.textContent = 'Slett';
-    slett.onclick = async () => {
-      if (!confirm('Slette «' + p.tittel + '» med ' + p.kommentarer.length + ' kommentarer?')) return;
-      for (const k of p.kommentarer) {
-        if (k.lydBlobRef) await dbSlett('lydklipp', k.lydBlobRef).catch(() => {});
-      }
-      // Rydd også lagret lydfil og filhåndtak, ellers blir de liggende igjen
-      await dbSlett('lydfiler', p.id).catch(() => {});
-      await dbSlett('handtak', p.id).catch(() => {});
-      if (NATIV && p.nativAdresse) {
-        try { window.ProofearNative.glemFil(p.nativAdresse); } catch (e) { /* ufarlig */ }
-      }
-      await dbSlett('prosjekter', p.id);
-      if (prosjekt && prosjekt.id === p.id) prosjekt = null;
-      await lastProsjekter();
-      visAktivtProsjekt();
-      oppdaterStartKnapp();
-      oppdaterLagreLydBoks();
-      logg('Slettet prosjekt: ' + p.tittel, 'info');
-    };
-
-    rad.append(info, velg, slett);
-    el.append(rad);
+    kort.append(tit, meta);
+    kort.onclick = () => visProsjektside(p);
+    el.append(kort);
   }
 }
 
 function visAktivtProsjekt() {
   const el = $('aktivtProsjekt');
-  if (!prosjekt) {
-    el.className = 'tom';
-    el.textContent = 'Ingen prosjekter ennå.';
-    return;
-  }
-  el.className = '';
   el.innerHTML = '';
-  const navn = document.createElement('div');
-  navn.style.fontWeight = '700';
-  navn.style.fontSize = '1.1rem';
-  navn.textContent = prosjekt.tittel;
-  const under = document.createElement('div');
-  under.style.color = 'var(--demp)';
-  under.style.marginTop = '4px';
-  under.textContent = prosjekt.kommentarer.length + ' kommentarer · ' + prosjekt.filnavn +
-    (prosjekt.filStorrelse ? ' (' + formatBytes(prosjekt.filStorrelse) + ')' : '');
-  el.append(navn, under);
+  $('hjemHero').style.display = prosjekter.length ? 'none' : 'block';
+  $('tilEtterarbeid').textContent = 'Alle lyttinger (' + prosjekter.length + ') ›';
+  $('tilEtterarbeid').style.display = prosjekter.length ? 'block' : 'none';
+  const p = prosjekt || prosjekter[0];
+  if (!p) return;
 
-  if (!lydErValgt()) {
-    const mangler = document.createElement('div');
-    mangler.style.color = 'var(--varsel)';
-    mangler.style.marginTop = '6px';
-    mangler.textContent = (prosjekt.harHandtak || prosjekt.nativAdresse)
-      ? '⚠ Lyden er ikke lastet – trykk «Velg» i listen for å åpne den igjen.'
-      : '⚠ Lyden er ikke lastet – velg filen «' + prosjekt.filnavn + '» over.';
-    el.append(mangler);
+  const kort = document.createElement('div');
+  kort.className = 'kort';
+
+  const spillknapp = document.createElement('button');
+  spillknapp.className = 'spillrund';
+  spillknapp.textContent = '▶';
+  spillknapp.onclick = async e => {
+    e.stopPropagation();
+    if (prosjekt !== p || !lydErValgt()) {
+      prosjekt = p;
+      await hentLydForProsjekt(p, true);
+    }
+    if (lydErValgt()) startKjoremodus();
+    else visProsjektside(p);
+  };
+
+  const eti = document.createElement('div');
+  eti.className = 'eti';
+  eti.textContent = 'Fortsett der du slapp';
+  const tit = document.createElement('div');
+  tit.className = 'tit';
+  tit.textContent = p.tittel;
+  const frem = document.createElement('div');
+  frem.className = 'frem';
+  const fyll = document.createElement('i');
+  frem.append(fyll);
+  const meta = document.createElement('div');
+  meta.className = 'sma';
+  const posisjon = p.sistPosisjonSek || 0;
+  meta.textContent = formatTid(posisjon) + ' · ' + p.kommentarer.length + ' notater';
+  if (prosjekt === p && isFinite(spiller.duration) && spiller.duration > 0) {
+    fyll.style.width = Math.round(100 * posisjon / spiller.duration) + '%';
+    meta.textContent = formatTid(posisjon) + ' av ' + formatTid(spiller.duration) +
+      ' · ' + p.kommentarer.length + ' notater';
   }
+
+  kort.append(spillknapp, eti, tit, frem, meta);
+  kort.onclick = () => visProsjektside(p);
+  el.append(kort);
 }
 
 /* ═══════════════ Lyd ═══════════════ */
@@ -1029,7 +960,7 @@ anker.src = lagStilleWav(60);
 function oppdaterAnker() {
   // I appen holder den native mediesesjonen knappene i live, så ankeret
   // trengs ikke - og uten det slipper vi å melde «spiller» under pause.
-  const skalSpille = !NATIV && visningNa === 'kjoremodus';
+  const skalSpille = !NATIV && visningNa === 'lytting';
   if (skalSpille && anker.paused) {
     anker.play().catch(err => logg('Sesjonsanker startet ikke: ' + err.message, 'feil'));
   } else if (!skalSpille && !anker.paused) {
@@ -1042,7 +973,7 @@ function oppdaterAnker() {
 // startes det igjen, så Chromes tilstand holder seg stabil.
 let ankerRetryTimer = null;
 anker.addEventListener('pause', () => {
-  if (visningNa !== 'kjoremodus' || tilstand === 'LYTTER') return;
+  if (visningNa !== 'lytting' || tilstand === 'LYTTER') return;
   clearTimeout(ankerRetryTimer);
   ankerRetryTimer = setTimeout(oppdaterAnker, 400);
 });
@@ -1055,7 +986,7 @@ function meldTilstand() {
   if (!('mediaSession' in navigator)) return;
   const spiller_na = NATIV
     ? !spiller.paused
-    : ((visningNa === 'kjoremodus') || !spiller.paused);
+    : ((visningNa === 'lytting') || !spiller.paused);
   navigator.mediaSession.playbackState = spiller_na ? 'playing' : 'paused';
 }
 
@@ -1236,21 +1167,24 @@ function settTilstand(ny) {
   flate.className = '';
   const hint = $('stortHint');
   if (ny === 'SPILLER') {
-    $('stortStatus').textContent = 'SPILLER';
+    $('stortStatus').textContent = '● SPILLER';
     flate.classList.add('spiller');
-    hint.textContent = 'Trykk for å kommentere';
+    hint.textContent = 'Trykk hvor som helst når du vil si noe';
   } else if (ny === 'LYTTER') {
-    $('stortStatus').textContent = 'LYTTER';
+    $('stortStatus').textContent = '● JEG HØRER DEG';
     flate.classList.add('lytter');
-    hint.textContent = 'Snakk nå – trykk igjen for å lagre';
+    hint.textContent = 'Snakk – trykk igjen for å lagre';
   } else if (ny === 'LAGRET') {
-    $('stortStatus').textContent = 'LAGRET';
+    $('stortStatus').textContent = '✓ NOTERT';
     flate.classList.add('lagret');
-    hint.textContent = 'Trykk for å fortsette avspillingen';
+    hint.textContent = 'Trykk for å lytte videre';
   } else {
     $('stortStatus').textContent = 'KLAR';
     hint.textContent = 'Trykk hvor som helst for å starte';
   }
+  // NOTAT-knappen er ankeret på trykkflaten - den speiler neste handling
+  $('knappNotatTekst').textContent = (ny === 'LYTTER') ? 'LAGRE'
+    : (ny === 'LAGRET') ? 'VIDERE' : 'NOTAT';
   meldTilstand();
   // Scrubbing midt i en pågående kommentar ville gjort det uklart hvor
   // kommentaren hører hjemme – lås tidslinjen mens vi lytter
@@ -1261,7 +1195,7 @@ function settTilstand(ny) {
 }
 
 function nesteSteg(frossenTid) {
-  if (visningNa !== 'kjoremodus') return;
+  if (visningNa !== 'lytting') return;
   if (!lydErValgt()) { logg('Ingen lydfil valgt', 'feil'); pip(PIP.feil); return; }
 
   if (tilstand === 'KLAR' || tilstand === 'LAGRET') {
@@ -1492,6 +1426,7 @@ function visSlettKnapp() {
   const fersk = (Date.now() - sistLagretTid) < 15000;
   const vis = harNoe && (tilstand === 'LAGRET' || (tilstand === 'SPILLER' && fersk));
   $('knappSlettSiste').style.display = vis ? 'inline-block' : 'none';
+  $('notatTeller').textContent = prosjekt ? prosjekt.kommentarer.length : 0;
 }
 
 $('knappSlettSiste').onclick = async e => {
@@ -1565,7 +1500,7 @@ spiller.addEventListener('pause', () => {
 });
 
 spiller.addEventListener('timeupdate', () => {
-  if (visningNa === 'kjoremodus' && tilstand === 'SPILLER') {
+  if (visningNa === 'lytting' && tilstand === 'SPILLER') {
     $('stortTid').textContent = formatTid(spiller.currentTime);
   }
   if (prosjekt && Math.abs(spiller.currentTime - prosjekt.sistPosisjonSek) > 3) {
@@ -1880,21 +1815,21 @@ document.addEventListener('visibilitychange', () => {
     logg('Appen er i bakgrunnen', 'feil');
   } else {
     logg('Appen er synlig igjen', 'ok');
-    if (visningNa === 'kjoremodus') beOmWakeLock();
+    if (visningNa === 'lytting') beOmWakeLock();
   }
 });
 
 /* ═══════════════ Visninger ═══════════════ */
 
-let visningNa = 'forberedelse';
+let visningNa = 'hjem';
 
 function visVisning(navn) {
-  for (const v of ['forberedelse', 'kjoremodus', 'etterarbeid', 'innstillinger']) {
+  for (const v of ['hjem', 'klargjor', 'lytting', 'oppsummering', 'bibliotek', 'prosjektside', 'innstillinger']) {
     $(v).classList.toggle('aktiv', v === navn);
   }
   visningNa = navn;
   oppdaterAnker();
-  if (navn === 'kjoremodus') beOmWakeLock();
+  if (navn === 'lytting') beOmWakeLock();
 }
 
 /* ---------- Forberedelse ---------- */
@@ -1968,6 +1903,7 @@ async function taIBrukFil(fil, handle) {
   visAktivtProsjekt();
   oppdaterStartKnapp();
   oppdaterLagreLydBoks();
+  visKlargjor();
 }
 
 function hoppTilLagretPosisjon() {
@@ -1988,20 +1924,30 @@ $('filVelger').addEventListener('change', async e => {
 
 // I appen brukes Androids egen filvelger, som gir varig tilgang uten kopi.
 // Da er både nettleserens filvelger og kopieringsvalget overflødige.
+// Én stor «Velg lydfil»-knapp ruter til riktig velger for kjøremiljøet
+function velgLydfil() {
+  if (NATIV) {
+    try { window.ProofearNative.velgFil(); }
+    catch (e) { logg('Kunne ikke åpne filvelgeren: ' + e.message, 'feil'); }
+  } else if (HAR_HANDTAK) {
+    $('knappHandtak').click();
+  } else {
+    $('filVelger').click();
+  }
+}
+$('knappVelgLyd').onclick = velgLydfil;
+$('knappNyFraBib').onclick = velgLydfil;
+
 if (NATIV) {
-  $('knappNativFil').style.display = 'block';
-  $('filVelger').style.display = 'none';
-  $('lagreLyd').parentElement.style.display = 'none';
-  $('hjelpLagring').textContent = 'Kommentarene lagres fortløpende og overlever ' +
-    'at appen lukkes. Lydfilen huskes automatisk uten kopi, så prosjektet er ' +
-    'klart neste gang du åpner appen.';
-} else if (HAR_HANDTAK) {
-  $('knappHandtak').style.display = 'inline-block';
+  // Appen husker filer via varig tilgang - kopiering trengs ikke
+  $('lagreLydRad').style.display = 'none';
+  $('hjelpLagring').textContent = 'Notatene lagres fortløpende og overlever at ' +
+    'appen lukkes. Lydfilen huskes automatisk uten kopi.';
 }
 
-$('knappNativFil').onclick = () => {
-  try { window.ProofearNative.velgFil(); }
-  catch (e) { logg('Kunne ikke åpne filvelgeren: ' + e.message, 'feil'); }
+$('visUrl').onclick = () => {
+  $('urlBoks').classList.toggle('synlig');
+  if ($('urlBoks').classList.contains('synlig')) $('urlFelt').focus();
 };
 
 $('knappHandtak').onclick = async () => {
@@ -2044,6 +1990,7 @@ $('knappLastUrl').onclick = async () => {
   visAktivtProsjekt();
   oppdaterStartKnapp();
   oppdaterLagreLydBoks();
+  visKlargjor();
 };
 
 $('tittelFelt').addEventListener('change', async () => {
@@ -2058,6 +2005,38 @@ $('tittelFelt').addEventListener('change', async () => {
 function oppdaterStartKnapp() {
   $('knappStart').disabled = !(prosjekt && lydErValgt());
 }
+
+// Fyller «Gjør klar»-siden og viser den. Kalles når en fil nettopp er valgt.
+function visKlargjor() {
+  if (!prosjekt) return;
+  $('klargjorFilnavn').textContent = prosjekt.filnavn;
+  const deler = [];
+  if (prosjekt.filStorrelse) deler.push(formatBytes(prosjekt.filStorrelse));
+  if (isFinite(spiller.duration) && spiller.duration > 0) deler.push(formatTid(spiller.duration));
+  if (prosjekt.nativAdresse || prosjekt.harHandtak) deler.push('huskes automatisk');
+  else if (prosjekt.kilde === 'url') deler.push('hentes fra nettadressen');
+  $('klargjorMeta').textContent = deler.join(' · ');
+  $('tittelFelt').value = prosjekt.tittel;
+  oppdaterChips();
+  oppdaterLagreLydBoks();
+  oppdaterStartKnapp();
+  visVisning('klargjor');
+}
+
+function oppdaterChips() {
+  document.querySelectorAll('#chipsHastighet .chip').forEach(c => {
+    c.classList.toggle('pa', Number(c.dataset.h) === Number(innst.hastighet));
+  });
+}
+
+document.querySelectorAll('#chipsHastighet .chip').forEach(c => {
+  c.addEventListener('click', () => {
+    innst.hastighet = Number(c.dataset.h);
+    spiller.playbackRate = innst.hastighet;
+    lagreInnstillinger();
+    oppdaterChips();
+  });
+});
 
 /* ---------- Lagring av lydfilen i appen ---------- */
 
@@ -2282,25 +2261,187 @@ async function tegnLagring() {
   }
 }
 
+let oektStartAntall = 0;
+let oektStartTid = 0;
+
 function startKjoremodus() {
+  // Web: forklar mikrofonbehovet FØR nettleserens systemdialog, én gang
+  if (!NATIV && !innst.micPrimet) {
+    $('micPrime').classList.add('synlig');
+    return;
+  }
+  oektStartAntall = prosjekt ? prosjekt.kommentarer.length : 0;
+  oektStartTid = Date.now();
   vekkLyd();
   spiller.playbackRate = innst.hastighet;
   // I appen tar forgrunnstjenesten over som knappemottaker
   if (NATIV) {
     try { window.ProofearNative.startMedieokt(); } catch (e) { logg('Kunne ikke starte medieøkt: ' + e.message, 'feil'); }
   }
-  visVisning('kjoremodus');
+  visVisning('lytting');
   settTilstand('KLAR');
   $('stortTid').textContent = formatTid(spiller.currentTime);
-  logg('Kjøremodus startet', 'ok');
+  logg('Lytting startet', 'ok');
 }
+
+$('knappPrimeOk').onclick = () => {
+  innst.micPrimet = true;
+  lagreInnstillinger();
+  $('micPrime').classList.remove('synlig');
+  startKjoremodus();
+};
 
 $('knappStart').onclick = startKjoremodus;
 
+function visHjem() {
+  visAktivtProsjekt();
+  visVisning('hjem');
+}
+
 $('tilInnstillinger').onclick = () => { fyllInnstillinger(); tegnLagring(); visVisning('innstillinger'); };
-$('fraInnstillinger').onclick = () => visVisning('forberedelse');
-$('tilEtterarbeid').onclick = () => { tegnKommentarer(); visVisning('etterarbeid'); };
-$('fraEtterarbeid').onclick = () => { visAktivtProsjekt(); tegnProsjektListe(); visVisning('forberedelse'); };
+$('fraInnstillinger').onclick = visHjem;
+$('tilEtterarbeid').onclick = () => { tegnProsjektListe(); visVisning('bibliotek'); };
+$('fraEtterarbeid').onclick = visHjem;
+$('fraKlargjor').onclick = visHjem;
+$('fraProsjekt').onclick = () => { tegnProsjektListe(); visVisning('bibliotek'); };
+
+// -- Prosjektsiden: alt om én lytting på ett sted --
+async function visProsjektside(p) {
+  if (prosjekt !== p || !lydErValgt()) {
+    prosjekt = p;
+    await hentLydForProsjekt(p, true);
+  }
+  $('pTittel').textContent = p.tittel;
+  const merke = (p.nativAdresse || p.harHandtak) ? '🔗 filen huskes'
+    : p.lagretLyd ? '💾 lyd lagret i appen'
+    : p.kilde === 'url' ? '🌐 hentes fra nett' : 'filen må velges på nytt';
+  $('pMeta').textContent = p.kommentarer.length + ' notater · ' +
+    formatTid(p.sistPosisjonSek || 0) + ' hørt · ' + merke;
+  $('knappFortsett').disabled = !lydErValgt();
+  tegnKommentarer();
+  visVisning('prosjektside');
+}
+
+$('knappFortsett').onclick = () => { if (lydErValgt()) startKjoremodus(); };
+
+$('knappSlettProsjekt').onclick = async () => {
+  const p = prosjekt;
+  if (!p) return;
+  if (!confirm('Slette «' + p.tittel + '» med ' + p.kommentarer.length + ' notater?')) return;
+  for (const k of p.kommentarer) {
+    if (k.lydBlobRef) await dbSlett('lydklipp', k.lydBlobRef).catch(() => {});
+  }
+  await dbSlett('lydfiler', p.id).catch(() => {});
+  await dbSlett('handtak', p.id).catch(() => {});
+  if (NATIV && p.nativAdresse) {
+    try { window.ProofearNative.glemFil(p.nativAdresse); } catch (e) { /* ufarlig */ }
+  }
+  await dbSlett('prosjekter', p.id);
+  prosjekt = null;
+  await lastProsjekter();
+  logg('Slettet lytting: ' + p.tittel, 'info');
+  visHjem();
+};
+
+// -- Oppsummering etter økten (peak-end: avslutt med mestring) --
+function visOppsummering() {
+  const antall = prosjekt ? prosjekt.kommentarer.length - oektStartAntall : 0;
+  const min = Math.max(1, Math.round((Date.now() - oektStartTid) / 60000));
+  $('oppsTittel').innerHTML = antall > 0
+    ? 'Bra jobba!<br>' + antall + ' notat' + (antall === 1 ? '' : 'er') + ' på ' + min + ' min'
+    : 'Lytting ferdig';
+  const liste = $('oppsListe');
+  liste.innerHTML = '';
+  const viste = prosjekt
+    ? prosjekt.kommentarer.slice().sort((a, b) => b.opprettet - a.opprettet).slice(0, 4)
+        .sort((a, b) => a.tidskodeSek - b.tidskodeSek)
+    : [];
+  if (!viste.length) liste.innerHTML = '<div class="tom">Ingen notater denne gangen.</div>';
+  for (const k of viste) {
+    const rad = document.createElement('div');
+    rad.className = 'notatrad';
+    const tk = document.createElement('span');
+    tk.className = 'tkknapp';
+    tk.textContent = formatTid(k.tidskodeSek);
+    const tekst = document.createElement('span');
+    tekst.textContent = k.tekst;
+    rad.append(tk, tekst);
+    liste.append(rad);
+  }
+  visVisning('oppsummering');
+}
+
+$('knappFerdig').onclick = visHjem;
+$('oppsAlle').onclick = () => { if (prosjekt) visProsjektside(prosjekt); };
+
+// -- Ark: notater under lyttingen, og deling --
+function lukkArk() {
+  $('arkBak').classList.remove('synlig');
+  $('notatArk').classList.remove('synlig');
+  $('delArk').classList.remove('synlig');
+}
+$('arkBak').onclick = lukkArk;
+
+$('notatHandtak').onclick = () => {
+  if (tilstand === 'LYTTER') return;   // ikke midt i et notat
+  const liste = $('notatArkListe');
+  liste.innerHTML = '';
+  const alle = prosjekt ? prosjekt.kommentarer : [];
+  $('notatArkAntall').textContent = alle.length;
+  if (!alle.length) liste.innerHTML = '<div class="tom">Ingen notater ennå.</div>';
+  for (const k of alle) {
+    const rad = document.createElement('div');
+    rad.className = 'notatrad';
+    const tk = document.createElement('button');
+    tk.className = 'tkknapp';
+    tk.textContent = formatTid(k.tidskodeSek);
+    tk.onclick = () => { spiller.currentTime = k.tidskodeSek; lukkArk(); };
+    const tekst = document.createElement('span');
+    tekst.textContent = k.tekst;
+    rad.append(tk, tekst);
+    liste.append(rad);
+  }
+  $('arkBak').classList.add('synlig');
+  $('notatArk').classList.add('synlig');
+};
+
+function aapneDelArk() {
+  oppdaterCsvForhaand();
+  $('arkBak').classList.add('synlig');
+  $('delArk').classList.add('synlig');
+}
+$('knappDelProsjekt').onclick = aapneDelArk;
+$('knappDelFraOpps').onclick = aapneDelArk;
+
+// Deling som ren tekst - dekker melding, e-post og dokument
+function byggTekst() {
+  if (!prosjekt) return '';
+  return prosjekt.tittel + String.fromCharCode(10) + prosjekt.kommentarer.map(k =>
+    formatTid(k.tidskodeSek) + '  ' + k.tekst).join(String.fromCharCode(10));
+}
+
+$('knappDelTekst').onclick = async () => {
+  if (!prosjekt || !prosjekt.kommentarer.length) { alert('Ingen notater å dele.'); return; }
+  const tekst = byggTekst();
+  if (navigator.share) {
+    try { await navigator.share({ text: tekst, title: prosjekt.tittel }); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  try { await navigator.clipboard.writeText(tekst); alert('Notatene er kopiert - lim dem inn der du vil.'); }
+  catch (e) { alert('Kunne ikke dele: ' + e.message); }
+};
+
+$('knappDelFrameio').onclick = async () => {
+  if (!prosjekt || !prosjekt.kommentarer.length) { alert('Ingen notater å dele.'); return; }
+  // Frame.io bruker rammebasert tidskode uansett hva regnearkvalget står på
+  const fil = new File([csvBlob('HHMMSSFF')], csvFilnavn(), { type: 'text/csv' });
+  if (navigator.canShare && navigator.canShare({ files: [fil] })) {
+    try { await navigator.share({ files: [fil], title: prosjekt.tittel }); }
+    catch (e) { if (e.name !== 'AbortError') logg('Deling feilet: ' + e.message, 'feil'); }
+  } else {
+    alert('Deling av filer støttes ikke her - bruk «Last ned CSV-fil i stedet».');
+  }
+};
 
 /* ---------- Kjøremodus ---------- */
 
@@ -2340,7 +2481,7 @@ function oppdaterScrubber() {
   scrubber.value = spiller.currentTime;
   $('scrubNa').textContent = formatTid(spiller.currentTime);
 }
-setInterval(() => { if (visningNa === 'kjoremodus') oppdaterScrubber(); }, 500);
+setInterval(() => { if (visningNa === 'lytting') oppdaterScrubber(); }, 500);
 
 $('knappAvslutt').onclick = async e => {
   e.stopPropagation();
@@ -2352,15 +2493,13 @@ $('knappAvslutt').onclick = async e => {
   if (NATIV) {
     try { window.ProofearNative.stoppMedieokt(); } catch (e) { /* ufarlig */ }
   }
-  visVisning('forberedelse');
-  visAktivtProsjekt();
-  tegnProsjektListe();
-  logg('Kjøremodus avsluttet', 'ok');
+  visOppsummering();
+  logg('Lytting avsluttet', 'ok');
 };
 
 // Stor tidsvisning også når lyden står stille
 setInterval(() => {
-  if (visningNa !== 'kjoremodus') return;
+  if (visningNa !== 'lytting') return;
   if (tilstand !== 'SPILLER') {
     $('stortTid').textContent = formatTid(tilstand === 'KLAR' ? spiller.currentTime : kommentarTid);
   }
@@ -2493,11 +2632,11 @@ function csvFelt(verdi) {
   return '"' + String(verdi).replace(/"/g, '""') + '"';
 }
 
-function byggCsv() {
+function byggCsv(format) {
   const linjer = ['Timecode,Comment'];
   if (prosjekt) {
     for (const k of prosjekt.kommentarer) {
-      linjer.push(csvFelt(tidskode(k.tidskodeSek, innst.csvFormat, innst.fps)) + ',' + csvFelt(k.tekst));
+      linjer.push(csvFelt(tidskode(k.tidskodeSek, format || innst.csvFormat, innst.fps)) + ',' + csvFelt(k.tekst));
     }
   }
   return linjer.join('\r\n');
@@ -2517,9 +2656,9 @@ function csvFilnavn() {
   return (grunn || 'proofear') + '.csv';
 }
 
-function csvBlob() {
+function csvBlob(format) {
   // UTF-8 med BOM, så Excel og Frame.io leser norske tegn riktig
-  return new Blob(['﻿' + byggCsv()], { type: 'text/csv;charset=utf-8' });
+  return new Blob(['﻿' + byggCsv(format)], { type: 'text/csv;charset=utf-8' });
 }
 
 $('csvFormat').addEventListener('change', () => {
@@ -2683,7 +2822,7 @@ $('innDiagnose').addEventListener('change', () => {
     }
   }
 
-  visAktivtProsjekt();
+  visHjem();
   oppdaterStartKnapp();
   oppdaterLagreLydBoks();
 })();
