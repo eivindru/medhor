@@ -95,6 +95,12 @@
     text-align: center; margin: 12px 0 8px; }
   #hjem .under { color: var(--demp); font-size: .92rem; text-align: center;
     max-width: 30ch; margin: 0 auto 22px; }
+  #forhandsBanner { display: none; align-items: center; gap: 10px; background: #FFF6DF;
+    border: 2px solid var(--sol); border-radius: 14px; padding: 10px 12px; margin-bottom: 12px;
+    font-size: .84rem; font-weight: 700; line-height: 1.4; }
+  #forhandsBanner span { flex: 1; }
+  #forhandsBanner button { background: var(--blekk); color: #fff; border: none; border-radius: 10px;
+    padding: 9px 14px; font-weight: 800; font-size: .82rem; cursor: pointer; flex: none; }
   #melding { display: none; background: var(--flate); border: 2px solid var(--sol);
     border-radius: 14px; padding: 12px 14px; margin-bottom: 12px; font-size: .9rem; line-height: 1.5; }
   .tipskort { display: flex; gap: 10px; background: var(--flate); border-radius: 14px;
@@ -273,6 +279,10 @@
     <span class="logo">Proofear <span class="sma" id="versjon"></span></span>
     <button class="iknapp" id="tilInnstillinger" aria-label="Innstillinger">&#8943;</button>
   </div>
+  <div id="forhandsBanner">
+    <span>Forh&aring;ndsvisning &ndash; slik m&oslash;ter en ny bruker appen. Ingenting er slettet.</span>
+    <button id="avsluttForhands">Avslutt</button>
+  </div>
   <div id="melding"></div>
 
   <div id="aktivtProsjekt"></div>
@@ -443,6 +453,7 @@
         <button class="liten" id="kopierLogg">&#128203; Kopier logg</button>
         <button class="liten" id="tomLogg">T&oslash;m logg</button>
         <button class="liten" id="knappMicTest">&#129514; Test mikrofondeling</button>
+        <button class="liten" id="knappForhands">&#128065; Forh&aring;ndsvis f&oslash;rstegangsvisningen</button>
       </div>
     </div>
   </details>
@@ -519,7 +530,7 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v4.1';
+const VERSJON = 'v4.2';
 
 // Nettleseren gir aldri en webapp filstien. Dette API-et gir i stedet et
 // håndtak som kan lagres og gjenbrukes mot et tillatelsestrykk – finnes i
@@ -939,18 +950,20 @@ function tegnProsjektListe() {
 function visAktivtProsjekt() {
   const el = $('aktivtProsjekt');
   el.innerHTML = '';
-  $('hjemHero').style.display = prosjekter.length ? 'none' : 'block';
+  // I forhåndsvisning later hjem som om ingenting er lagret
+  const antall = forhandsvisning ? 0 : prosjekter.length;
+  $('hjemHero').style.display = antall ? 'none' : 'block';
   // Førstegangsbrukeren får den store grønne; returbrukeren en hul, siden
   // «fortsett»-kortet da er hovedhandlingen (som i designforslaget)
   const velgKnapp = $('knappVelgLyd');
-  velgKnapp.classList.toggle('hul', prosjekter.length > 0);
-  velgKnapp.innerHTML = prosjekter.length
+  velgKnapp.classList.toggle('hul', antall > 0);
+  velgKnapp.innerHTML = antall
     ? 'Velg ny lydfil'
     : 'Velg lydfil<small>MP3, WAV, lydbok, forelesning …</small>';
-  $('visSlik').style.display = prosjekter.length ? 'none' : 'block';
-  $('tilEtterarbeid').textContent = 'Alle lyttinger (' + prosjekter.length + ') ›';
-  $('tilEtterarbeid').style.display = prosjekter.length ? 'block' : 'none';
-  const p = prosjekt || prosjekter[0];
+  $('visSlik').style.display = antall ? 'none' : 'block';
+  $('tilEtterarbeid').textContent = 'Alle lyttinger (' + antall + ') ›';
+  $('tilEtterarbeid').style.display = antall ? 'block' : 'none';
+  const p = forhandsvisning ? null : (prosjekt || prosjekter[0]);
   if (!p) return;
 
   const kort = document.createElement('div');
@@ -2376,7 +2389,7 @@ function startKjoremodus(autoSpill) {
   if (autoSpill !== undefined) autoSpillVedStart = !!autoSpill;
   // Forklar mikrofonbehovet FØR systemdialogen, én gang - gjelder både web
   // og app, siden appen ikke lenger spør ved oppstart
-  if (!innst.micPrimet) {
+  if (!innst.micPrimet || forhandsvisning) {
     $('micPrime').classList.add('synlig');
     return;
   }
@@ -2400,8 +2413,11 @@ function startKjoremodus(autoSpill) {
 }
 
 $('knappPrimeOk').onclick = () => {
-  innst.micPrimet = true;
-  lagreInnstillinger();
+  // I forhåndsvisning skal valget ikke lagres - da kan skjermen vises igjen
+  if (!forhandsvisning) {
+    innst.micPrimet = true;
+    lagreInnstillinger();
+  }
   $('micPrime').classList.remove('synlig');
   // I appen ber vi Android om tillatelsen nå - rett etter forklaringen
   if (NATIV) {
@@ -2411,6 +2427,22 @@ $('knappPrimeOk').onclick = () => {
 };
 
 $('knappStart').onclick = startKjoremodus;
+
+// Forhåndsvisning av førstegangsopplevelsen. Skjuler prosjekter i
+// grensesnittet uten å røre noe lagret - nyttig både for å vurdere
+// designet og for å ta rene skjermbilder til butikksiden (milepæl A6).
+let forhandsvisning = false;
+
+function settForhandsvisning(pa) {
+  forhandsvisning = pa;
+  $('forhandsBanner').style.display = pa ? 'flex' : 'none';
+  logg(pa ? 'Forhåndsvisning av førstegangsvisningen PÅ – ingenting er slettet'
+          : 'Forhåndsvisning avsluttet', 'info');
+  visHjem();
+}
+
+$('knappForhands').onclick = () => { settForhandsvisning(true); };
+$('avsluttForhands').onclick = () => { settForhandsvisning(false); };
 
 function visHjem() {
   visAktivtProsjekt();
