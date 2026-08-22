@@ -3,30 +3,49 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#F2F5F2">
+<meta name="theme-color" content="#F5F7F5">
 <title>Proofear</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text y='52' font-size='52'>🎧</text></svg>">
 <style>
-  /* == Ett spor - design v3 ==
-     Lys, rund og vennlig som standard; moerk variant foelger telefonen.
-     Systemfont med tunge vekter i stedet for webfont - appen skal virke
-     uten nett, og medhor.html skal ikke ha eksterne avhengigheter. */
+  /* == Ett spor - Design 1, eksakt palett ==
+     Appen er LYS - det er identiteten. Bare selve lytteskjermen kan bli
+     mørk (kveld/bil), styrt av telefonens tema eller valget under
+     Innstillinger > Avansert > Utseende. */
   :root {
-    --bg:#F2F5F2; --flate:#FFFFFF; --blekk:#1C2826; --demp:#6B7A74;
-    --svak:#8A968F; --linje:#DFE7E1; --gronn:#0E9F6E; --gronnD:#0B7A55;
-    --gronnBg:#DFF0E6; --gronnFlate:#EAF4EE; --rec:#E8564A; --recD:#B4453B;
-    --recBg:#F6D9D2; --sol:#FFC63F;
-    --skygge:0 6px 18px -8px rgba(28,40,38,.18);
+    --bg:#F5F7F5; --flate:#FFFFFF; --blekk:#1C2826; --demp:#5C6B66;
+    --svak:#8A968F; --linje:#DCE4DE; --gronn:#0E9F6E; --gronnD:#0B7A55;
+    --gronnBg:#DFF0E6; --gronnFlate:#EAF4EE;
+    --rec:#E8564A; --recD:#B4453B; --recBg:#F6D9D2; --recFlate:#FBEBE7;
+    --sol:#FFC63F;
+    --skygge:0 4px 14px -8px rgba(28,40,38,.22);
+    --skyggeStor:0 8px 18px -8px rgba(28,40,38,.28);
     --innrykk-topp:0px; --innrykk-bunn:0px; --innrykk-venstre:0px; --innrykk-hoyre:0px;
   }
+
+  /* Lytteskjermens egne farger - lys som standard */
+  #lytting {
+    --oktRam:var(--bg); --oktRo:var(--flate);
+    --oktSpiller:var(--gronnBg); --oktLytter:var(--recBg);
+    --oktGronn:var(--gronnD); --oktRod:var(--recD);
+    --oktTekst:var(--blekk); --oktDemp:var(--demp); --oktBoble:var(--flate);
+  }
+  /* Mørk lytteskjerm når telefonen står mørk (med mindre bruker har valgt lys) */
   @media (prefers-color-scheme: dark) {
-    :root {
-      --bg:#111614; --flate:#1A211D; --blekk:#EDF3EF; --demp:#9FAFA7;
-      --svak:#7C8B84; --linje:#2A342E; --gronn:#22B27E; --gronnD:#5ED0A5;
-      --gronnBg:#1B3A2C; --rec:#EF6A59; --recD:#F49385; --recBg:#42221C;
-      --skygge:0 6px 18px -8px rgba(0,0,0,.55);
+    html:not([data-utseende="lys"]) #lytting {
+      --oktRam:#0E1513; --oktRo:#18211D;
+      --oktSpiller:#153023; --oktLytter:#33201C;
+      --oktGronn:#5ED0A5; --oktRod:#F49385;
+      --oktTekst:#EDF3EF; --oktDemp:#9FAFA7; --oktBoble:#1E2823;
     }
   }
+  /* Brukerens eget valg vinner alltid */
+  html[data-utseende="mork"] #lytting {
+    --oktRam:#0E1513; --oktRo:#18211D;
+    --oktSpiller:#153023; --oktLytter:#33201C;
+    --oktGronn:#5ED0A5; --oktRod:#F49385;
+    --oktTekst:#EDF3EF; --oktDemp:#9FAFA7; --oktBoble:#1E2823;
+  }
+
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; }
   body {
@@ -91,6 +110,14 @@
   select { background: var(--flate); border: 1.5px solid var(--linje); border-radius: 12px;
     font-size: .95rem; padding: 10px 12px; }
   input[type="checkbox"] { width: 26px; height: 26px; flex: none; accent-color: var(--gronn); }
+  /* Brytere - designet viste av/på som brytere, ikke avkrysning */
+  input.bryter { appearance: none; -webkit-appearance: none; width: 48px; height: 28px;
+    border-radius: 15px; background: var(--linje); position: relative; cursor: pointer;
+    transition: background .18s; flex: none; border: none; }
+  input.bryter::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px;
+    border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(28,40,38,.35); transition: transform .18s; }
+  input.bryter:checked { background: var(--gronn); }
+  input.bryter:checked::after { transform: translateX(20px); }
 
   .felt { margin: 4px 0 14px; }
   .felt label { display: block; font-size: .72rem; font-weight: 800; letter-spacing: .06em;
@@ -106,23 +133,24 @@
   .rad { display: flex; gap: 10px; align-items: center; }
   .hjelp { color: var(--svak); font-size: .82rem; line-height: 1.5; margin: 8px 0 0; }
 
-  #lytting { padding-left: 0; padding-right: 0; padding-bottom: 0; }
+  #lytting { padding-left: 0; padding-right: 0; padding-bottom: 0;
+    background: var(--oktRam); color: var(--oktTekst); }
   #kjoreTopp { display: flex; align-items: center; gap: 10px;
     padding: 4px calc(16px + var(--innrykk-hoyre)) 6px calc(16px + var(--innrykk-venstre));
-    font-size: .8rem; color: var(--svak); font-weight: 700; font-variant-numeric: tabular-nums; }
-  #kjoreTopp input[type="range"] { flex: 1; height: 44px; accent-color: var(--gronn); margin: 0; background: transparent; border: none; padding: 0; }
+    font-size: .8rem; color: var(--oktDemp); font-weight: 700; font-variant-numeric: tabular-nums; }
+  #kjoreTopp input[type="range"] { flex: 1; height: 44px; accent-color: var(--oktGronn); margin: 0; background: transparent; border: none; padding: 0; }
   #kjoreTopp input[type="range"]:disabled { opacity: .35; }
   #trykkflate { flex: 1; display: flex; flex-direction: column; align-items: center;
     justify-content: center; text-align: center; margin: 0 16px; padding: 18px 16px;
-    border-radius: 24px; background: var(--flate); transition: background .2s; user-select: none; min-height: 0; }
-  #trykkflate.spiller, #trykkflate.lagret { background: var(--gronnBg); }
-  #trykkflate.lytter { background: var(--recBg); }
-  #stortStatus { font-weight: 900; font-size: .95rem; letter-spacing: .14em; color: var(--gronnD); }
-  #trykkflate.lytter #stortStatus, #trykkflate.lytter #stortTid, #trykkflate.lytter #stortHint { color: var(--recD); }
+    border-radius: 24px; background: var(--oktRo); transition: background .2s; user-select: none; min-height: 0; }
+  #trykkflate.spiller, #trykkflate.lagret { background: var(--oktSpiller); }
+  #trykkflate.lytter { background: var(--oktLytter); }
+  #stortStatus { font-weight: 900; font-size: .95rem; letter-spacing: .14em; color: var(--oktGronn); }
+  #trykkflate.lytter #stortStatus, #trykkflate.lytter #stortTid, #trykkflate.lytter #stortHint { color: var(--oktRod); }
   #stortTid { font-weight: 900; font-size: clamp(3rem, 16vw, 4.4rem); letter-spacing: -.02em;
     line-height: 1.05; margin: 2px 0 4px; font-variant-numeric: tabular-nums; }
-  #stortHint { font-size: .92rem; font-weight: 700; color: var(--demp); }
-  #liveTekst { font-size: .98rem; font-weight: 700; background: var(--flate);
+  #stortHint { font-size: .92rem; font-weight: 700; color: var(--oktDemp); }
+  #liveTekst { font-size: .98rem; font-weight: 700; background: var(--oktBoble);
     border-radius: 14px; padding: 10px 14px; margin-top: 14px; max-width: 94%;
     max-height: 26vh; overflow-y: auto; line-height: 1.45; }
   #liveTekst:empty { display: none; }
@@ -132,16 +160,16 @@
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
   #knappNotat .mik { font-size: 1.7rem; line-height: 1; }
   #trykkflate.lytter #knappNotat { background: var(--rec); box-shadow: 0 12px 26px -10px rgba(232,86,74,.6); }
-  #knappSlettSiste { background: none; border: none; color: var(--recD); font-weight: 800;
+  #knappSlettSiste { background: none; border: none; color: var(--oktRod); font-weight: 800;
     font-size: .9rem; margin-top: 14px; padding: 8px 14px; cursor: pointer; }
   #kjoreBunn { display: flex; gap: 8px;
     padding: 10px calc(16px + var(--innrykk-hoyre)) 10px calc(16px + var(--innrykk-venstre)); }
-  #kjoreBunn button { flex: 1; min-height: 58px; background: var(--flate); border: none;
-    border-radius: 14px; font-weight: 900; font-size: .98rem; box-shadow: var(--skygge); cursor: pointer; }
-  #notatHandtak { margin: 0 16px; background: var(--flate); border-radius: 16px 16px 0 0;
+  #kjoreBunn button { flex: 1; min-height: 58px; background: var(--oktRo); color: var(--oktTekst);
+    border: none; border-radius: 14px; font-weight: 900; font-size: .98rem; box-shadow: var(--skygge); cursor: pointer; }
+  #notatHandtak { margin: 0 16px; background: var(--oktRo); color: var(--oktTekst); border-radius: 16px 16px 0 0;
     padding: 12px 18px calc(12px + var(--innrykk-bunn)); display: flex; justify-content: space-between;
     font-weight: 800; font-size: .92rem; box-shadow: var(--skygge); cursor: pointer; }
-  #notatHandtak span { color: var(--gronnD); }
+  #notatHandtak span { color: var(--oktGronn); }
 
   .ark-bak { display: none; position: fixed; inset: 0; background: rgba(16,24,20,.45); z-index: 40; }
   .ark-bak.synlig { display: block; }
@@ -223,6 +251,18 @@
   #micPrime .ikon { font-size: 3rem; margin-bottom: 12px; }
   #micPrime h2 { font-weight: 900; font-size: 1.4rem; line-height: 1.2; margin: 0 0 10px; }
   #micPrime p { color: var(--demp); font-size: .95rem; max-width: 32ch; margin: 0 auto; }
+  #micHvorfor { margin-top: 14px; font-size: .85rem; color: var(--svak); line-height: 1.55;
+    max-width: 34ch; margin-left: auto; margin-right: auto; display: none; }
+  #micHvorfor.synlig { display: block; }
+
+  /* «Se hvordan det virker» */
+  .steg { display: flex; gap: 14px; padding: 14px 2px; border-bottom: 1px solid var(--linje); }
+  .steg:last-of-type { border-bottom: none; }
+  .steg .nr { width: 34px; height: 34px; border-radius: 50%; background: var(--gronnBg);
+    color: var(--gronnD); font-weight: 900; display: flex; align-items: center;
+    justify-content: center; flex: none; font-size: .95rem; }
+  .steg .txt b { display: block; font-weight: 800; font-size: .98rem; margin-bottom: 2px; }
+  .steg .txt span { font-size: .87rem; color: var(--demp); line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -254,6 +294,7 @@
     <button class="liten" id="knappLastUrl">Hent</button>
   </div>
 
+  <button class="lenkeknapp" id="visSlik">Se hvordan det virker &middot; 30 sek</button>
   <button class="lenkeknapp" id="tilEtterarbeid">Alle lyttinger &rsaquo;</button>
 
   <div class="tipskort"><span>&#128161;</span><span>Knappen p&aring; hodetelefonene og rattknappene i bilen
@@ -286,7 +327,7 @@
   <details class="mervalg">
     <summary>Flere valg</summary>
     <div class="rad" id="lagreLydRad" style="margin:8px 0 4px">
-      <input type="checkbox" id="lagreLyd" disabled>
+      <input type="checkbox" class="bryter" id="lagreLyd" disabled>
       <label for="lagreLyd" style="font-size:.9rem;font-weight:700">Lagre lydfilen i appen</label>
     </div>
     <div class="hjelp" id="lagreLydInfo"></div>
@@ -363,7 +404,7 @@
     <span style="width:44px"></span>
   </div>
   <div class="settrad"><span class="beskr">Lydsignal ved notat<small>pip n&aring;r lyttingen starter og stopper</small></span>
-    <input type="checkbox" id="innPip"></div>
+    <input type="checkbox" class="bryter" id="innPip"></div>
   <div class="settrad"><span class="beskr">Knappetrykkene<small>tre trykk gir pause etter lagring; to trykk fortsetter selv</small></span>
     <select id="innSyklus"><option value="tredelt">Tre trykk</option><option value="todelt">To trykk</option></select></div>
   <div class="settrad"><span class="beskr">Spolelengde<small>hvor langt &laquo; og &raquo; hopper</small></span>
@@ -381,6 +422,8 @@
       <input type="range" id="innDobbelVindu" min="200" max="800" step="50" style="width:44%"></div>
     <div class="settrad"><span class="beskr">Lydopptak av notater<small>reserve n&aring;r dikteringen svikter</small></span>
       <select id="innBackupModus"><option value="vedBehov">Ved behov</option><option value="alltid">Alltid</option><option value="av">Av</option></select></div>
+    <div class="settrad"><span class="beskr">Utseende p&aring; lytteskjermen<small>resten av appen er alltid lys</small></span>
+      <select id="innUtseende"><option value="auto">F&oslash;lg telefonen</option><option value="lys">Alltid lys</option><option value="mork">Alltid m&oslash;rk</option></select></div>
     <div class="settrad"><span class="beskr">Bilder per sekund<small>for HH:MM:SS:FF-tidskoder</small></span>
       <select id="innFps"><option value="24">24</option><option value="25">25</option><option value="30">30</option></select></div>
     <div style="margin:14px 2px 4px" class="sma">LAGRING</div>
@@ -391,7 +434,7 @@
   <details class="mervalg">
     <summary>Diagnose</summary>
     <div class="rad" style="margin:8px 0">
-      <input type="checkbox" id="innDiagnose">
+      <input type="checkbox" class="bryter" id="innDiagnose">
       <label for="innDiagnose" style="font-weight:700;font-size:.9rem">Vis diagnoselogg</label>
     </div>
     <div id="diagnosePanel" style="display:none">
@@ -442,8 +485,31 @@
     <div class="ikon">&#127908;</div>
     <h2>Notatene lages av stemmen din</h2>
     <p>Derfor sp&oslash;r vi om mikrofonen i neste steg. Den brukes bare n&aring;r du snakker inn et notat &ndash; aldri ellers.</p>
+    <div id="micHvorfor">Proofear gj&oslash;r om stemmen din til tekst mens du lytter. Uten
+      mikrofontilgang kan appen fortsatt spille av og lagre tidspunkter, men notatene
+      m&aring; du skrive inn selv. Lyden fra notatene sendes til talegjenkjenningen p&aring;
+      telefonen din, og opptak startes aldri uten at du trykker.</div>
   </div>
   <button class="cta" id="knappPrimeOk">Greit, fortsett</button>
+  <button class="lenkeknapp" id="micHvorforKnapp">Hvorfor trengs dette?</button>
+</div>
+
+<div class="ark" id="slikArk">
+  <div class="grip"></div>
+  <div class="ark-topp">
+    <h3>Slik virker Proofear</h3>
+    <button class="iknapp" id="lukkSlikArk" aria-label="Lukk">&#10005;</button>
+  </div>
+  <div class="rull">
+    <div class="steg"><span class="nr">1</span><span class="txt">
+      <b>Velg en lydfil</b><span>Lydbok, forelesning, intervju, innlesning &ndash; alt du vil lytte til og notere p&aring;.</span></span></div>
+    <div class="steg"><span class="nr">2</span><span class="txt">
+      <b>Lytt, og trykk n&aring;r du vil si noe</b><span>Lyden pauses n&oslash;yaktig der du er. Du sier notatet h&oslash;yt, og det skrives ned med riktig tidspunkt.</span></span></div>
+    <div class="steg"><span class="nr">3</span><span class="txt">
+      <b>Del notatene</b><span>Som tekst rett i en melding, som regneark, eller til Frame.io med tidskoder.</span></span></div>
+    <p class="hjelp" style="margin-top:14px">Knappen p&aring; hodetelefonene og rattknappene i bilen
+      virker akkurat som trykk p&aring; skjermen &ndash; da slipper du &aring; ta opp telefonen.</p>
+  </div>
 </div>
 
 <script>
@@ -453,7 +519,7 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v3.1';
+const VERSJON = 'v4.1';
 
 // Nettleseren gir aldri en webapp filstien. Dette API-et gir i stedet et
 // håndtak som kan lagres og gjenbrukes mot et tillatelsestrykk – finnes i
@@ -674,6 +740,7 @@ const STANDARD = {
   backupModus: 'vedBehov',   // vedBehov | alltid | av
   syklus: 'tredelt',         // tredelt | todelt (se avsluttKommentar)
   micPrimet: false,          // har brukeren sett mikrofon-forklaringen?
+  utseende: 'auto',          // auto | lys | mork - gjelder KUN lytteskjermen
   sprak: 'nb-NO',
   diagnose: false
 };
@@ -807,7 +874,9 @@ let prosjekter = [];
 
 async function lastProsjekter() {
   prosjekter = await dbAlle('prosjekter');
-  prosjekter.sort((a, b) => b.opprettet - a.opprettet);
+  // Sist BRUKTE først - et prosjekt du nettopp lyttet på er mer relevant
+  // enn ett du opprettet men aldri åpnet.
+  prosjekter.sort((a, b) => (b.sistBrukt || b.opprettet) - (a.sistBrukt || a.opprettet));
   tegnProsjektListe();
 }
 
@@ -871,6 +940,14 @@ function visAktivtProsjekt() {
   const el = $('aktivtProsjekt');
   el.innerHTML = '';
   $('hjemHero').style.display = prosjekter.length ? 'none' : 'block';
+  // Førstegangsbrukeren får den store grønne; returbrukeren en hul, siden
+  // «fortsett»-kortet da er hovedhandlingen (som i designforslaget)
+  const velgKnapp = $('knappVelgLyd');
+  velgKnapp.classList.toggle('hul', prosjekter.length > 0);
+  velgKnapp.innerHTML = prosjekter.length
+    ? 'Velg ny lydfil'
+    : 'Velg lydfil<small>MP3, WAV, lydbok, forelesning …</small>';
+  $('visSlik').style.display = prosjekter.length ? 'none' : 'block';
   $('tilEtterarbeid').textContent = 'Alle lyttinger (' + prosjekter.length + ') ›';
   $('tilEtterarbeid').style.display = prosjekter.length ? 'block' : 'none';
   const p = prosjekt || prosjekter[0];
@@ -1834,11 +1911,28 @@ document.addEventListener('visibilitychange', () => {
 
 let visningNa = 'hjem';
 
+// Er lytteskjermen mørk akkurat nå? (valg + telefonens tema)
+function lytteskjermErMork() {
+  const valg = innst.utseende || 'auto';
+  if (valg === 'mork') return true;
+  if (valg === 'lys') return false;
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+// Statuslinjens ikoner må skifte farge med bakgrunnen, ellers blir klokka
+// hvit på lys flate og nesten usynlig.
+function meldBakgrunn() {
+  if (!NATIV) return;
+  const lys = !(visningNa === 'lytting' && lytteskjermErMork());
+  try { window.ProofearNative.settLysBakgrunn(lys); } catch (e) { /* eldre app */ }
+}
+
 function visVisning(navn) {
   for (const v of ['hjem', 'klargjor', 'lytting', 'oppsummering', 'bibliotek', 'prosjektside', 'innstillinger']) {
     $(v).classList.toggle('aktiv', v === navn);
   }
   visningNa = navn;
+  meldBakgrunn();
   oppdaterAnker();
   if (navn === 'lytting') beOmWakeLock();
 }
@@ -2280,13 +2374,15 @@ let autoSpillVedStart = false;
 // brukeren at lyden faktisk begynner, ikke bare at skjermen åpnes.
 function startKjoremodus(autoSpill) {
   if (autoSpill !== undefined) autoSpillVedStart = !!autoSpill;
-  // Web: forklar mikrofonbehovet FØR nettleserens systemdialog, én gang
-  if (!NATIV && !innst.micPrimet) {
+  // Forklar mikrofonbehovet FØR systemdialogen, én gang - gjelder både web
+  // og app, siden appen ikke lenger spør ved oppstart
+  if (!innst.micPrimet) {
     $('micPrime').classList.add('synlig');
     return;
   }
   oektStartAntall = prosjekt ? prosjekt.kommentarer.length : 0;
   oektStartTid = Date.now();
+  if (prosjekt) { prosjekt.sistBrukt = Date.now(); lagreProsjekt(); }
   vekkLyd();
   spiller.playbackRate = innst.hastighet;
   // I appen tar forgrunnstjenesten over som knappemottaker
@@ -2307,6 +2403,10 @@ $('knappPrimeOk').onclick = () => {
   innst.micPrimet = true;
   lagreInnstillinger();
   $('micPrime').classList.remove('synlig');
+  // I appen ber vi Android om tillatelsen nå - rett etter forklaringen
+  if (NATIV) {
+    try { window.ProofearNative.beOmMikrofon(); } catch (e) { /* eldre app */ }
+  }
   startKjoremodus();
 };
 
@@ -2400,9 +2500,23 @@ function lukkArk() {
   $('arkBak').classList.remove('synlig');
   $('notatArk').classList.remove('synlig');
   $('delArk').classList.remove('synlig');
+  $('slikArk').classList.remove('synlig');
 }
 $('arkBak').onclick = lukkArk;
 $('lukkNotatArk').onclick = lukkArk;
+$('lukkSlikArk').onclick = lukkArk;
+
+$('visSlik').onclick = () => {
+  $('arkBak').classList.add('synlig');
+  $('slikArk').classList.add('synlig');
+};
+
+$('micHvorforKnapp').onclick = () => {
+  const boks = $('micHvorfor');
+  boks.classList.toggle('synlig');
+  $('micHvorforKnapp').textContent = boks.classList.contains('synlig')
+    ? 'Skjul forklaringen' : 'Hvorfor trengs dette?';
+};
 $('lukkDelArk').onclick = lukkArk;
 
 $('notatHandtak').onclick = () => {
@@ -2738,6 +2852,7 @@ function fyllInnstillinger() {
   $('innHastighet').value = innst.hastighet;
   $('innPip').checked = innst.pip;
   $('innSyklus').value = innst.syklus;
+  $('innUtseende').value = innst.utseende || 'auto';
   $('innBackupModus').value = innst.backupModus;
   $('innSprak').value = innst.sprak;
   $('innFps').value = innst.fps;
@@ -2789,6 +2904,18 @@ $('innBackupModus').addEventListener('change', () => {
   logg('Backupmodus: ' + innst.backupModus, 'ok');
 });
 $('innSprak').addEventListener('change', () => { innst.sprak = $('innSprak').value; lagreInnstillinger(); });
+function brukUtseende() {
+  document.documentElement.setAttribute('data-utseende', innst.utseende || 'auto');
+}
+
+$('innUtseende').addEventListener('change', () => {
+  innst.utseende = $('innUtseende').value;
+  lagreInnstillinger();
+  brukUtseende();
+  meldBakgrunn();
+  logg('Utseende på lytteskjermen: ' + innst.utseende, 'ok');
+});
+
 $('innFps').addEventListener('change', () => {
   innst.fps = Number($('innFps').value);
   lagreInnstillinger();
@@ -2804,6 +2931,7 @@ $('innDiagnose').addEventListener('change', () => {
 
 (async function start() {
   lastInnstillinger();
+  brukUtseende();
   oppdaterSpolVisning();
   $('csvFormat').value = innst.csvFormat;
   logg('Proofear ' + VERSJON + ' startet' + (NATIV ? ' – NATIV MODUS (Proofear-appen)' : ''), 'ok');
