@@ -166,8 +166,12 @@
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
   #knappNotat .mik { font-size: 1.7rem; line-height: 1; }
   #trykkflate.lytter #knappNotat { background: var(--rec); box-shadow: 0 12px 26px -10px rgba(232,86,74,.6); }
+  /* Utenfor #trykkflate med vilje: knappen delte tidligere treffflate med
+     selve trykk-hendelsen, så et bomtrykk kunne slette et notat. */
+  #slettStripe { display: flex; justify-content: center; flex: none;
+    padding: 0 calc(16px + var(--innrykk-hoyre)) 0 calc(16px + var(--innrykk-venstre)); }
   #knappSlettSiste { background: none; border: none; color: var(--oktRod); font-weight: 800;
-    font-size: .9rem; margin-top: 14px; padding: 8px 14px; cursor: pointer; }
+    font-size: .9rem; margin: 10px 0 0; padding: 10px 18px; cursor: pointer; }
   #kjoreBunn { display: flex; gap: 8px;
     padding: 10px calc(16px + var(--innrykk-hoyre)) 10px calc(16px + var(--innrykk-venstre)); }
   #kjoreBunn button { flex: 1; min-height: 58px; background: var(--oktRo); color: var(--oktTekst);
@@ -253,6 +257,7 @@
   #micPrime { position: fixed; inset: 0; z-index: 50; background: var(--bg); display: none;
     flex-direction: column; padding: calc(20px + var(--innrykk-topp)) 22px calc(24px + var(--innrykk-bunn)); }
   #micPrime.synlig { display: flex; }
+  #micPrime #micTilbake { text-align: left; padding: 8px 0; flex: none; }
   #micPrime .midt { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: center; }
   #micPrime .ikon { font-size: 3rem; margin-bottom: 12px; }
   #micPrime h2 { font-weight: 900; font-size: 1.4rem; line-height: 1.2; margin: 0 0 10px; }
@@ -260,6 +265,25 @@
   #micHvorfor { margin-top: 14px; font-size: .85rem; color: var(--svak); line-height: 1.55;
     max-width: 34ch; margin-left: auto; margin-right: auto; display: none; }
   #micHvorfor.synlig { display: block; }
+
+  h2.seksjon { font-size: .72rem; font-weight: 800; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--svak); margin: 4px 0 10px; }
+  /* Returbrukeren skal ha «start ny lytting» nederst på siden. For
+     førstegangsbrukeren står helten øverst og knappen rett under, som før. */
+  #hjem.retur #nyBolk { margin-top: auto; }
+  #hjem.retur .tipskort { margin-top: 14px; }
+
+  .minikort { display: flex; align-items: center; gap: 12px; background: var(--flate);
+    border-radius: 14px; padding: 11px 13px; box-shadow: var(--skygge);
+    margin-bottom: 10px; cursor: pointer; }
+  .minikort .mtxt { flex: 1; min-width: 0; }
+  .minikort .mtit { display: block; font-weight: 800; font-size: .95rem;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .minikort .mmeta { display: block; color: var(--svak); font-size: .78rem;
+    font-weight: 600; margin-top: 1px; }
+  .minikort .mspill { width: 42px; height: 42px; border-radius: 50%; flex: none;
+    background: var(--gronnBg); color: var(--gronnD); border: none;
+    font-size: 1rem; cursor: pointer; }
 
   /* «Se hvordan det virker» */
   .steg { display: flex; gap: 14px; padding: 14px 2px; border-bottom: 1px solid var(--linje); }
@@ -285,7 +309,9 @@
   </div>
   <div id="melding"></div>
 
+  <h2 class="seksjon" id="fortsettTittel">Fortsett der du slapp</h2>
   <div id="aktivtProsjekt"></div>
+  <button class="lenkeknapp" id="tilEtterarbeid">Vis alle lyttinger &rsaquo;</button>
 
   <div id="hjemHero">
     <div class="blob"><i style="height:26px"></i><i style="height:48px"></i><i style="height:70px"></i><i style="height:40px"></i><i style="height:58px"></i><i style="height:22px"></i></div>
@@ -293,19 +319,21 @@
     <div class="under">Proofear skriver ned det du sier mens du lytter &ndash; festet til riktig sted i lyden.</div>
   </div>
 
-  <button class="cta" id="knappVelgLyd">Velg lydfil<small>MP3, WAV, lydbok, forelesning &hellip;</small></button>
-  <input type="file" id="filVelger" accept="audio/*" style="display:none">
-  <button class="liten" id="knappNativFil" style="display:none">&#128194;</button>
-  <button class="liten" id="knappHandtak" style="display:none">&#128194; Velg fil som huskes</button>
+  <div id="nyBolk">
+    <h2 class="seksjon" id="nyTittel">Start ny lytting</h2>
+    <button class="cta" id="knappVelgLyd">Velg lydfil<small>MP3, WAV, lydbok, forelesning &hellip;</small></button>
+    <input type="file" id="filVelger" accept="audio/*" style="display:none">
+    <button class="liten" id="knappNativFil" style="display:none">&#128194;</button>
+    <button class="liten" id="knappHandtak" style="display:none">&#128194; Velg fil som huskes</button>
 
-  <button class="lenkeknapp" id="visUrl">Hent fra nettadresse &rsaquo;</button>
-  <div class="urlfelt" id="urlBoks">
-    <input type="url" id="urlFelt" placeholder="https://&hellip;" inputmode="url">
-    <button class="liten" id="knappLastUrl">Hent</button>
+    <button class="lenkeknapp" id="visUrl">Hent fra nettadresse &rsaquo;</button>
+    <div class="urlfelt" id="urlBoks">
+      <input type="url" id="urlFelt" placeholder="https://&hellip;" inputmode="url">
+      <button class="liten" id="knappLastUrl">Hent</button>
+    </div>
+
+    <button class="lenkeknapp" id="visSlik">Se hvordan det virker &middot; 30 sek</button>
   </div>
-
-  <button class="lenkeknapp" id="visSlik">Se hvordan det virker &middot; 30 sek</button>
-  <button class="lenkeknapp" id="tilEtterarbeid">Alle lyttinger &rsaquo;</button>
 
   <div class="tipskort"><span>&#128161;</span><span>Knappen p&aring; hodetelefonene og rattknappene i bilen
     virker som notat-knapp mens du lytter.</span></div>
@@ -359,6 +387,8 @@
     <div id="stortHint">Trykk hvor som helst for &aring; starte</div>
     <button id="knappNotat"><span class="mik">&#127908;</span><span id="knappNotatTekst">NOTAT</span></button>
     <div id="liveTekst"></div>
+  </div>
+  <div id="slettStripe">
     <button id="knappSlettSiste" style="display:none">&#128465; Slett siste notat</button>
   </div>
   <div id="kjoreBunn">
@@ -481,17 +511,18 @@
     <button class="delvalg" id="knappDelTekst"><i>&#128172;</i><span>Som tekst<small>lim inn hvor som helst</small></span></button>
     <button class="delvalg" id="knappDelCsv"><i>&#128202;</i><span>Regneark (CSV)<small>Excel, Google Sheets</small></span></button>
     <button class="delvalg" id="knappDelFrameio"><i>&#127916;</i><span>Frame.io<small>CSV med tidskoder HH:MM:SS:FF</small></span></button>
+    <button class="delvalg" id="knappLastCsv"><i>&#11015;</i><span>Last ned CSV-fil<small>lagres p&aring; telefonen</small></span></button>
     <details class="mervalg">
       <summary>Tilpass formatet</summary>
       <div class="settrad"><span class="beskr">Tidskodeformat i regneark-CSV</span>
         <select id="csvFormat"><option value="HHMMSSFF">HH:MM:SS:FF</option><option value="HHMMSSmmm">HH:MM:SS.mmm</option><option value="MMSS">MM:SS</option></select></div>
       <div id="csvForhaand">&ndash;</div>
-      <button class="lenkeknapp" id="knappLastCsv">Last ned CSV-fil i stedet</button>
     </details>
   </div>
 </div>
 
 <div id="micPrime">
+  <button class="lenkeknapp" id="micTilbake">&lsaquo; Tilbake</button>
   <div class="midt">
     <div class="ikon">&#127908;</div>
     <h2>Notatene lages av stemmen din</h2>
@@ -530,7 +561,7 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v4.2';
+const VERSJON = 'v4.3';
 
 // Nettleseren gir aldri en webapp filstien. Dette API-et gir i stedet et
 // håndtak som kan lagres og gjenbrukes mot et tillatelsestrykk – finnes i
@@ -637,7 +668,7 @@ window.proofearFilValgt = async function (adresse, navn, storrelse) {
     logg('Gjenåpnet prosjekt: ' + prosjekt.tittel, 'ok');
     hoppTilLagretPosisjon();
   } else {
-    await nyttProsjekt(navn, $('tittelFelt').value.trim() || navn, {
+    await nyttProsjekt(navn, $('tittelFelt').value.trim() || utenEndelse(navn), {
       kilde: 'nativ', nativAdresse: adresse, filStorrelse: st
     });
   }
@@ -896,11 +927,17 @@ async function lagreProsjekt() {
   await dbSkriv('prosjekter', prosjekt);
 }
 
+// Tittelforslaget skal ikke vise «.mp3». Selve filnavnet beholder endelsen -
+// det brukes til duplikatsjekk mot navn + størrelse.
+function utenEndelse(navn) {
+  return String(navn || '').replace(/\.[A-Za-z0-9]{1,5}$/, '') || String(navn || '');
+}
+
 async function nyttProsjekt(filnavn, tittel, ekstra) {
   prosjekt = Object.assign({
     id: nyId(),
     filnavn: filnavn,
-    tittel: tittel || filnavn,
+    tittel: tittel || utenEndelse(filnavn),
     opprettet: Date.now(),
     sistPosisjonSek: 0,
     kommentarer: [],
@@ -947,44 +984,32 @@ function tegnProsjektListe() {
   }
 }
 
-function visAktivtProsjekt() {
-  const el = $('aktivtProsjekt');
-  el.innerHTML = '';
-  // I forhåndsvisning later hjem som om ingenting er lagret
-  const antall = forhandsvisning ? 0 : prosjekter.length;
-  $('hjemHero').style.display = antall ? 'none' : 'block';
-  // Førstegangsbrukeren får den store grønne; returbrukeren en hul, siden
-  // «fortsett»-kortet da er hovedhandlingen (som i designforslaget)
-  const velgKnapp = $('knappVelgLyd');
-  velgKnapp.classList.toggle('hul', antall > 0);
-  velgKnapp.innerHTML = antall
-    ? 'Velg ny lydfil'
-    : 'Velg lydfil<small>MP3, WAV, lydbok, forelesning …</small>';
-  $('visSlik').style.display = antall ? 'none' : 'block';
-  $('tilEtterarbeid').textContent = 'Alle lyttinger (' + antall + ') ›';
-  $('tilEtterarbeid').style.display = antall ? 'block' : 'none';
-  const p = forhandsvisning ? null : (prosjekt || prosjekter[0]);
-  if (!p) return;
+// Hvor mange lyttinger forsiden viser før resten havner i biblioteket.
+// Tre holder siden lesbar på en telefon; det fjerde kortet ville uansett
+// falt under skjermkanten sammen med «start ny lytting»-bolken.
+const FORSIDE_KORT = 3;
 
+// ▶ på et forsidekort: brukeren venter at lyden faktisk begynner
+async function startFraKort(p) {
+  if (prosjekt !== p || !lydErValgt()) {
+    prosjekt = p;
+    await hentLydForProsjekt(p, true);
+  }
+  if (lydErValgt()) startKjoremodus(true);
+  else visProsjektside(p);
+}
+
+// Øverste kort: fremdriftslinje og stor ▶, hovedhandlingen på forsiden
+function byggStortKort(p) {
   const kort = document.createElement('div');
   kort.className = 'kort';
 
   const spillknapp = document.createElement('button');
   spillknapp.className = 'spillrund';
   spillknapp.textContent = '▶';
-  spillknapp.onclick = async e => {
-    e.stopPropagation();
-    if (prosjekt !== p || !lydErValgt()) {
-      prosjekt = p;
-      await hentLydForProsjekt(p, true);
-    }
-    if (lydErValgt()) startKjoremodus(true);
-    else visProsjektside(p);
-  };
+  spillknapp.setAttribute('aria-label', 'Fortsett ' + p.tittel);
+  spillknapp.onclick = e => { e.stopPropagation(); startFraKort(p); };
 
-  const eti = document.createElement('div');
-  eti.className = 'eti';
-  eti.textContent = 'Fortsett der du slapp';
   const tit = document.createElement('div');
   tit.className = 'tit';
   tit.textContent = p.tittel;
@@ -1002,9 +1027,66 @@ function visAktivtProsjekt() {
       ' · ' + p.kommentarer.length + ' notater';
   }
 
-  kort.append(spillknapp, eti, tit, frem, meta);
+  kort.append(spillknapp, tit, frem, meta);
   kort.onclick = () => visProsjektside(p);
-  el.append(kort);
+  return kort;
+}
+
+// De neste kortene: kompakte rader, så siden ikke blir en lang liste
+function byggMinikort(p) {
+  const rad = document.createElement('div');
+  rad.className = 'minikort';
+  const txt = document.createElement('span');
+  txt.className = 'mtxt';
+  const t = document.createElement('span');
+  t.className = 'mtit';
+  t.textContent = p.tittel;
+  const m = document.createElement('span');
+  m.className = 'mmeta';
+  m.textContent = formatTid(p.sistPosisjonSek || 0) + ' · ' + p.kommentarer.length + ' notater';
+  txt.append(t, m);
+  const spill = document.createElement('button');
+  spill.className = 'mspill';
+  spill.textContent = '▶';
+  spill.setAttribute('aria-label', 'Fortsett ' + p.tittel);
+  spill.onclick = e => { e.stopPropagation(); startFraKort(p); };
+  rad.append(txt, spill);
+  rad.onclick = () => visProsjektside(p);
+  return rad;
+}
+
+function visAktivtProsjekt() {
+  const el = $('aktivtProsjekt');
+  el.innerHTML = '';
+  // I forhåndsvisning later hjem som om ingenting er lagret
+  const antall = forhandsvisning ? 0 : prosjekter.length;
+  $('hjem').classList.toggle('retur', antall > 0);
+  $('hjemHero').style.display = antall ? 'none' : 'block';
+  $('fortsettTittel').style.display = antall ? 'block' : 'none';
+  $('nyTittel').style.display = antall ? 'block' : 'none';
+  // Førstegangsbrukeren får den store grønne; returbrukeren en hul, siden
+  // «fortsett»-kortet da er hovedhandlingen (som i designforslaget)
+  const velgKnapp = $('knappVelgLyd');
+  velgKnapp.classList.toggle('hul', antall > 0);
+  velgKnapp.innerHTML = antall
+    ? 'Velg ny lydfil'
+    : 'Velg lydfil<small>MP3, WAV, lydbok, forelesning …</small>';
+  $('visSlik').style.display = antall ? 'none' : 'block';
+  $('tilEtterarbeid').textContent = 'Vis alle lyttinger (' + antall + ') ›';
+  $('tilEtterarbeid').style.display = antall ? 'block' : 'none';
+  if (!antall) return;
+
+  // Det åpne prosjektet først, deretter de sist brukte. prosjekter er
+  // allerede sortert på sistBrukt av lastProsjekter().
+  const rekke = [];
+  if (prosjekt && prosjekter.indexOf(prosjekt) !== -1) rekke.push(prosjekt);
+  for (const p of prosjekter) {
+    if (rekke.length >= FORSIDE_KORT) break;
+    if (rekke.indexOf(p) === -1) rekke.push(p);
+  }
+
+  el.append(byggStortKort(rekke[0]));
+  for (let i = 1; i < rekke.length; i++) el.append(byggMinikort(rekke[i]));
 }
 
 /* ═══════════════ Lyd ═══════════════ */
@@ -1517,6 +1599,14 @@ async function fullfoerKommentar() {
 // etter ønske fra brukeren).
 let sistLagretTid = 0;
 
+// Nyeste etter opprettelsestidspunkt, ikke etter tidskode
+function nyesteKommentar() {
+  if (!prosjekt || !prosjekt.kommentarer.length) return null;
+  let nyest = prosjekt.kommentarer[0];
+  for (const k of prosjekt.kommentarer) if (k.opprettet > nyest.opprettet) nyest = k;
+  return nyest;
+}
+
 function visSlettKnapp() {
   const harNoe = !!(ferdigstilling || (prosjekt && prosjekt.kommentarer.length));
   // Todelt syklus hopper over LAGRET, så knappen vises en kort stund mens
@@ -1529,6 +1619,12 @@ function visSlettKnapp() {
 
 $('knappSlettSiste').onclick = async e => {
   e.stopPropagation();
+  // Bekreftelse: sletting kan ikke angres, og knappen treffes lett i bil
+  const forhaand = ferdigstilling
+    ? (samletTekst || '').trim()
+    : (nyesteKommentar() ? nyesteKommentar().tekst : '');
+  const kort = forhaand.length > 60 ? forhaand.slice(0, 60).trim() + '…' : forhaand;
+  if (!confirm(kort ? 'Slette notatet «' + kort + '»?' : 'Slette det siste notatet?')) return;
   if (ferdigstilling) {
     // Kommentaren er fortsatt under ferdigstilling – avbryt den helt, så
     // etterslengeren ikke gjenoppretter det brukeren nettopp slettet
@@ -1544,10 +1640,8 @@ $('knappSlettSiste').onclick = async e => {
     }
     if (f.lydRef) await dbSlett('lydklipp', f.lydRef).catch(() => {});
   } else {
-    // Nyeste etter opprettelsestidspunkt, ikke etter tidskode
-    if (!prosjekt || !prosjekt.kommentarer.length) return;
-    let nyest = prosjekt.kommentarer[0];
-    for (const k of prosjekt.kommentarer) if (k.opprettet > nyest.opprettet) nyest = k;
+    const nyest = nyesteKommentar();
+    if (!nyest) return;
     await slettKommentarMedId(nyest.id);
   }
   pip(PIP.angre);
@@ -1940,6 +2034,58 @@ function meldBakgrunn() {
   try { window.ProofearNative.settLysBakgrunn(lys); } catch (e) { /* eldre app */ }
 }
 
+/* ---------- Tilbake-knapp og -sveip ---------- */
+
+// Tilbake skal gå ett steg tilbake I appen, ikke lukke den. Hvert sted har
+// allerede en tilbakevei i grensesnittet, og her gjenbrukes nøyaktig den -
+// da gjør sveipet og knappen på skjermen garantert det samme.
+function kanGaaTilbake() {
+  return $('micPrime').classList.contains('synlig') ||
+         $('arkBak').classList.contains('synlig') ||
+         visningNa !== 'hjem';
+}
+
+function tilbakeHandling() {
+  // Ark og mikrofonskjerm ligger oppå visningene, og lukkes først
+  if ($('micPrime').classList.contains('synlig')) {
+    $('micPrime').classList.remove('synlig');
+    oppdaterTilbake();
+    return true;
+  }
+  if ($('arkBak').classList.contains('synlig')) { lukkArk(); return true; }
+  // Midt i en lytting betyr tilbake det samme som Avslutt: rydd opp i
+  // mediesesjon og wake lock, og vis oppsummeringen
+  if (visningNa === 'lytting') { $('knappAvslutt').click(); return true; }
+  if (visningNa === 'prosjektside') { tegnProsjektListe(); visVisning('bibliotek'); return true; }
+  if (visningNa !== 'hjem') { visHjem(); return true; }
+  return false;   // på forsiden slipper vi systemet til, som forventet
+}
+
+// To veier til samme sted: i appen slår vi en native vakt av og på, i
+// nettleseren holder vi et ekstra steg i historikken å gå tilbake til.
+// Uten det forlater tilbake hele siden.
+let historikkArmert = false;
+
+function oppdaterTilbake() {
+  const kan = kanGaaTilbake();
+  if (NATIV) {
+    try { window.ProofearNative.settKanTilbake(kan); } catch (e) { /* eldre app */ }
+    return;
+  }
+  if (kan && !historikkArmert) {
+    history.pushState({ proofear: true }, '');
+    historikkArmert = true;
+  }
+}
+
+window.addEventListener('popstate', () => {
+  historikkArmert = false;
+  if (tilbakeHandling()) oppdaterTilbake();
+});
+
+// Systemets tilbake-knapp i appen havner her
+window.proofearTilbake = function () { tilbakeHandling(); };
+
 function visVisning(navn) {
   for (const v of ['hjem', 'klargjor', 'lytting', 'oppsummering', 'bibliotek', 'prosjektside', 'innstillinger']) {
     $(v).classList.toggle('aktiv', v === navn);
@@ -1947,6 +2093,7 @@ function visVisning(navn) {
   visningNa = navn;
   meldBakgrunn();
   oppdaterAnker();
+  oppdaterTilbake();
   if (navn === 'lytting') beOmWakeLock();
 }
 
@@ -1999,7 +2146,7 @@ async function taIBrukFil(fil, handle) {
     logg('Gjenåpnet prosjekt: ' + prosjekt.tittel, 'ok');
     hoppTilLagretPosisjon();
   } else {
-    await nyttProsjekt(fil.name, $('tittelFelt').value.trim() || fil.name, {
+    await nyttProsjekt(fil.name, $('tittelFelt').value.trim() || utenEndelse(fil.name), {
       kilde: 'fil', filStorrelse: fil.size, filEndret: fil.lastModified || null
     });
   }
@@ -2101,7 +2248,7 @@ $('knappLastUrl').onclick = async () => {
     logg('Gjenåpnet prosjekt fra URL: ' + prosjekt.tittel, 'ok');
     hoppTilLagretPosisjon();
   } else {
-    await nyttProsjekt(navn, $('tittelFelt').value.trim() || navn, { kilde: 'url', url: url });
+    await nyttProsjekt(navn, $('tittelFelt').value.trim() || utenEndelse(navn), { kilde: 'url', url: url });
   }
   settMetadata();
   tegnProsjektListe();
@@ -2113,7 +2260,7 @@ $('knappLastUrl').onclick = async () => {
 
 $('tittelFelt').addEventListener('change', async () => {
   if (!prosjekt) return;
-  prosjekt.tittel = $('tittelFelt').value.trim() || prosjekt.filnavn;
+  prosjekt.tittel = $('tittelFelt').value.trim() || utenEndelse(prosjekt.filnavn);
   await lagreProsjekt();
   settMetadata();
   tegnProsjektListe();
@@ -2382,6 +2529,10 @@ async function tegnLagring() {
 let oektStartAntall = 0;
 let oektStartTid = 0;
 let autoSpillVedStart = false;
+// Forklaringen er vist i DENNE økten. Trengs fordi forhåndsvisningen med
+// vilje ikke lagrer innst.micPrimet - uten flagget slo vakten under til
+// igjen straks skjermen ble lukket, og brukeren kom aldri videre.
+let micPrimeVistNa = false;
 
 // autoSpill=true brukes av ▶-knappen på fortsett-kortet: da forventer
 // brukeren at lyden faktisk begynner, ikke bare at skjermen åpnes.
@@ -2389,8 +2540,9 @@ function startKjoremodus(autoSpill) {
   if (autoSpill !== undefined) autoSpillVedStart = !!autoSpill;
   // Forklar mikrofonbehovet FØR systemdialogen, én gang - gjelder både web
   // og app, siden appen ikke lenger spør ved oppstart
-  if (!innst.micPrimet || forhandsvisning) {
+  if ((!innst.micPrimet || forhandsvisning) && !micPrimeVistNa) {
     $('micPrime').classList.add('synlig');
+    oppdaterTilbake();
     return;
   }
   oektStartAntall = prosjekt ? prosjekt.kommentarer.length : 0;
@@ -2413,12 +2565,14 @@ function startKjoremodus(autoSpill) {
 }
 
 $('knappPrimeOk').onclick = () => {
+  micPrimeVistNa = true;
   // I forhåndsvisning skal valget ikke lagres - da kan skjermen vises igjen
   if (!forhandsvisning) {
     innst.micPrimet = true;
     lagreInnstillinger();
   }
   $('micPrime').classList.remove('synlig');
+  oppdaterTilbake();
   // I appen ber vi Android om tillatelsen nå - rett etter forklaringen
   if (NATIV) {
     try { window.ProofearNative.beOmMikrofon(); } catch (e) { /* eldre app */ }
@@ -2435,6 +2589,7 @@ let forhandsvisning = false;
 
 function settForhandsvisning(pa) {
   forhandsvisning = pa;
+  micPrimeVistNa = false;
   $('forhandsBanner').style.display = pa ? 'flex' : 'none';
   logg(pa ? 'Forhåndsvisning av førstegangsvisningen PÅ – ingenting er slettet'
           : 'Forhåndsvisning avsluttet', 'info');
@@ -2533,6 +2688,7 @@ function lukkArk() {
   $('notatArk').classList.remove('synlig');
   $('delArk').classList.remove('synlig');
   $('slikArk').classList.remove('synlig');
+  oppdaterTilbake();
 }
 $('arkBak').onclick = lukkArk;
 $('lukkNotatArk').onclick = lukkArk;
@@ -2541,6 +2697,12 @@ $('lukkSlikArk').onclick = lukkArk;
 $('visSlik').onclick = () => {
   $('arkBak').classList.add('synlig');
   $('slikArk').classList.add('synlig');
+  oppdaterTilbake();
+};
+
+$('micTilbake').onclick = () => {
+  $('micPrime').classList.remove('synlig');
+  oppdaterTilbake();
 };
 
 $('micHvorforKnapp').onclick = () => {
@@ -2572,15 +2734,58 @@ $('notatHandtak').onclick = () => {
   }
   $('arkBak').classList.add('synlig');
   $('notatArk').classList.add('synlig');
+  oppdaterTilbake();
 };
 
 function aapneDelArk() {
   oppdaterCsvForhaand();
   $('arkBak').classList.add('synlig');
   $('delArk').classList.add('synlig');
+  oppdaterTilbake();
 }
 $('knappDelProsjekt').onclick = aapneDelArk;
 $('knappDelFraOpps').onclick = aapneDelArk;
+
+/* ---------- Deling ----------
+   Android sitt system-WebView har ingen fildeling i navigator.share, så
+   canShare({files}) er ALLTID falsk der - deling endte bare i «støttes ikke
+   her». I appen går derfor både deling og nedlasting gjennom broen, som
+   åpner Androids egne dialoger. Web-appen bruker Web Share som før. */
+
+function harNativDeling(metode) {
+  return NATIV && window.ProofearNative && typeof window.ProofearNative[metode] === 'function';
+}
+
+window.proofearDelingFeilet = function (grunn) {
+  logg('Deling feilet: ' + grunn, 'feil');
+  alert('Kunne ikke dele filen: ' + grunn);
+};
+
+window.proofearLagringFerdig = function (filnavn) {
+  logg('CSV lagret: ' + filnavn, 'ok');
+  alert('Lagret som ' + filnavn + '.');
+};
+
+async function delCsv(format, merkelapp) {
+  if (!prosjekt || !prosjekt.kommentarer.length) { alert('Ingen notater å dele.'); return; }
+  const navn = csvFilnavn();
+  if (harNativDeling('delFil')) {
+    window.ProofearNative.delFil(navn, 'text/csv', csvTekst(format));
+    logg(merkelapp + ' sendt til deling', 'ok');
+    return;
+  }
+  const fil = new File([csvBlob(format)], navn, { type: 'text/csv' });
+  if (navigator.canShare && navigator.canShare({ files: [fil] })) {
+    try {
+      await navigator.share({ files: [fil], title: prosjekt.tittel });
+      logg(merkelapp + ' delt', 'ok');
+    } catch (e) {
+      if (e.name !== 'AbortError') logg('Deling feilet: ' + e.message, 'feil');
+    }
+  } else {
+    alert('Deling av filer støttes ikke her – bruk «Last ned CSV-fil» i stedet.');
+  }
+}
 
 // Deling som ren tekst - dekker melding, e-post og dokument
 function byggTekst() {
@@ -2592,6 +2797,11 @@ function byggTekst() {
 $('knappDelTekst').onclick = async () => {
   if (!prosjekt || !prosjekt.kommentarer.length) { alert('Ingen notater å dele.'); return; }
   const tekst = byggTekst();
+  if (harNativDeling('delTekst')) {
+    window.ProofearNative.delTekst(tekst, prosjekt.tittel);
+    logg('Notatene sendt til deling som tekst', 'ok');
+    return;
+  }
   if (navigator.share) {
     try { await navigator.share({ text: tekst, title: prosjekt.tittel }); return; }
     catch (e) { if (e.name === 'AbortError') return; }
@@ -2600,17 +2810,8 @@ $('knappDelTekst').onclick = async () => {
   catch (e) { alert('Kunne ikke dele: ' + e.message); }
 };
 
-$('knappDelFrameio').onclick = async () => {
-  if (!prosjekt || !prosjekt.kommentarer.length) { alert('Ingen notater å dele.'); return; }
-  // Frame.io bruker rammebasert tidskode uansett hva regnearkvalget står på
-  const fil = new File([csvBlob('HHMMSSFF')], csvFilnavn(), { type: 'text/csv' });
-  if (navigator.canShare && navigator.canShare({ files: [fil] })) {
-    try { await navigator.share({ files: [fil], title: prosjekt.tittel }); }
-    catch (e) { if (e.name !== 'AbortError') logg('Deling feilet: ' + e.message, 'feil'); }
-  } else {
-    alert('Deling av filer støttes ikke her - bruk «Last ned CSV-fil i stedet».');
-  }
-};
+// Frame.io bruker rammebasert tidskode uansett hva regnearkvalget står på
+$('knappDelFrameio').onclick = () => delCsv('HHMMSSFF', 'Frame.io-CSV');
 
 /* ---------- Kjøremodus ---------- */
 
@@ -2825,9 +3026,13 @@ function csvFilnavn() {
   return (grunn || 'proofear') + '.csv';
 }
 
+// UTF-8 med BOM, så Excel og Frame.io leser norske tegn riktig
+function csvTekst(format) {
+  return '﻿' + byggCsv(format);
+}
+
 function csvBlob(format) {
-  // UTF-8 med BOM, så Excel og Frame.io leser norske tegn riktig
-  return new Blob(['﻿' + byggCsv(format)], { type: 'text/csv;charset=utf-8' });
+  return new Blob([csvTekst(format)], { type: 'text/csv;charset=utf-8' });
 }
 
 $('csvFormat').addEventListener('change', () => {
@@ -2838,6 +3043,12 @@ $('csvFormat').addEventListener('change', () => {
 
 $('knappLastCsv').onclick = () => {
   if (!prosjekt || !prosjekt.kommentarer.length) { alert('Ingen kommentarer å eksportere.'); return; }
+  // Nedlasting fra blob-URL gjør ingenting i en WebView. I appen ber vi
+  // Android om «lagre som», så brukeren velger mappe selv.
+  if (harNativDeling('lagreFil')) {
+    window.ProofearNative.lagreFil(csvFilnavn(), 'text/csv', csvTekst(innst.csvFormat));
+    return;
+  }
   const url = URL.createObjectURL(csvBlob());
   const a = document.createElement('a');
   a.href = url;
@@ -2849,20 +3060,7 @@ $('knappLastCsv').onclick = () => {
   logg('CSV lastet ned', 'ok');
 };
 
-$('knappDelCsv').onclick = async () => {
-  if (!prosjekt || !prosjekt.kommentarer.length) { alert('Ingen kommentarer å eksportere.'); return; }
-  const fil = new File([csvBlob()], csvFilnavn(), { type: 'text/csv' });
-  if (navigator.canShare && navigator.canShare({ files: [fil] })) {
-    try {
-      await navigator.share({ files: [fil], title: prosjekt.tittel });
-      logg('CSV delt', 'ok');
-    } catch (e) {
-      if (e.name !== 'AbortError') logg('Deling feilet: ' + e.message, 'feil');
-    }
-  } else {
-    alert('Deling av filer støttes ikke her – bruk «Last ned CSV» i stedet.');
-  }
-};
+$('knappDelCsv').onclick = () => delCsv(innst.csvFormat, 'CSV');
 
 /* ═══════════════ Innstillingsskjema ═══════════════ */
 
