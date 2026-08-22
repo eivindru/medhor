@@ -150,7 +150,9 @@
     max-height: 78vh; display: none; flex-direction: column; box-shadow: 0 -12px 40px rgba(0,0,0,.3); }
   .ark.synlig { display: flex; }
   .ark .grip { width: 40px; height: 5px; border-radius: 3px; background: var(--linje); margin: 2px auto 12px; flex: none; }
-  .ark h3 { margin: 0 0 10px; font-size: 1rem; font-weight: 800; }
+  .ark h3 { margin: 0; font-size: 1rem; font-weight: 800; }
+  .ark-topp { display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px; flex: none; }
   .ark .rull { overflow-y: auto; min-height: 0; }
 
   .notatrad { display: flex; gap: 10px; padding: 11px 2px; border-bottom: 1px solid var(--linje);
@@ -408,13 +410,19 @@
 
 <div class="ark" id="notatArk">
   <div class="grip"></div>
-  <h3>Notater &middot; <span id="notatArkAntall">0</span></h3>
+  <div class="ark-topp">
+    <h3>Notater &middot; <span id="notatArkAntall">0</span></h3>
+    <button class="iknapp" id="lukkNotatArk" aria-label="Lukk">&#10005;</button>
+  </div>
   <div class="rull" id="notatArkListe"></div>
 </div>
 
 <div class="ark" id="delArk">
   <div class="grip"></div>
-  <h3>Del notatene</h3>
+  <div class="ark-topp">
+    <h3>Del notatene</h3>
+    <button class="iknapp" id="lukkDelArk" aria-label="Lukk">&#10005;</button>
+  </div>
   <div class="rull">
     <button class="delvalg" id="knappDelTekst"><i>&#128172;</i><span>Som tekst<small>lim inn hvor som helst</small></span></button>
     <button class="delvalg" id="knappDelCsv"><i>&#128202;</i><span>Regneark (CSV)<small>Excel, Google Sheets</small></span></button>
@@ -445,7 +453,7 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v3.0';
+const VERSJON = 'v3.1';
 
 // Nettleseren gir aldri en webapp filstien. Dette API-et gir i stedet et
 // håndtak som kan lagres og gjenbrukes mot et tillatelsestrykk – finnes i
@@ -880,7 +888,7 @@ function visAktivtProsjekt() {
       prosjekt = p;
       await hentLydForProsjekt(p, true);
     }
-    if (lydErValgt()) startKjoremodus();
+    if (lydErValgt()) startKjoremodus(true);
     else visProsjektside(p);
   };
 
@@ -1520,6 +1528,9 @@ spiller.addEventListener('timeupdate', () => {
 
 spiller.addEventListener('loadedmetadata', () => {
   oppdaterPosisjon();
+  // Fortsett-kortet tegnes ofte før lengden er kjent - tegn det på nytt
+  // nå som vi vet hvor langt sporet er, ellers står fremdriftslinjen tom.
+  if (visningNa === 'hjem') visAktivtProsjekt();
   if (isFinite(spiller.duration) && spiller.duration < 5) {
     logg('ADVARSEL: lydfilen er under 5 sekunder – Android lager da ingen mediesesjon, og rattknappene virker ikke.', 'feil');
   }
@@ -2263,8 +2274,12 @@ async function tegnLagring() {
 
 let oektStartAntall = 0;
 let oektStartTid = 0;
+let autoSpillVedStart = false;
 
-function startKjoremodus() {
+// autoSpill=true brukes av ▶-knappen på fortsett-kortet: da forventer
+// brukeren at lyden faktisk begynner, ikke bare at skjermen åpnes.
+function startKjoremodus(autoSpill) {
+  if (autoSpill !== undefined) autoSpillVedStart = !!autoSpill;
   // Web: forklar mikrofonbehovet FØR nettleserens systemdialog, én gang
   if (!NATIV && !innst.micPrimet) {
     $('micPrime').classList.add('synlig');
@@ -2282,6 +2297,10 @@ function startKjoremodus() {
   settTilstand('KLAR');
   $('stortTid').textContent = formatTid(spiller.currentTime);
   logg('Lytting startet', 'ok');
+  if (autoSpillVedStart) {
+    autoSpillVedStart = false;
+    nesteSteg(spiller.currentTime);
+  }
 }
 
 $('knappPrimeOk').onclick = () => {
@@ -2364,7 +2383,9 @@ function visOppsummering() {
     tk.className = 'tkknapp';
     tk.textContent = formatTid(k.tidskodeSek);
     const tekst = document.createElement('span');
-    tekst.textContent = k.tekst;
+    // Kortet skal kunne skummes - lange notater kuttes her, hele teksten
+    // finnes i notatlisten og i eksporten.
+    tekst.textContent = k.tekst.length > 90 ? k.tekst.slice(0, 90).trim() + '…' : k.tekst;
     rad.append(tk, tekst);
     liste.append(rad);
   }
@@ -2381,6 +2402,8 @@ function lukkArk() {
   $('delArk').classList.remove('synlig');
 }
 $('arkBak').onclick = lukkArk;
+$('lukkNotatArk').onclick = lukkArk;
+$('lukkDelArk').onclick = lukkArk;
 
 $('notatHandtak').onclick = () => {
   if (tilstand === 'LYTTER') return;   // ikke midt i et notat
