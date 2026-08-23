@@ -407,6 +407,7 @@
   <div class="listekort" id="oppsListe"></div>
   <button class="lenkeknapp" id="oppsAlle">Se alle notatene &rsaquo;</button>
   <button class="cta" id="knappDelFraOpps" style="margin-top:auto">Del notatene</button>
+  <button class="cta hul" id="knappFortsettOpps" style="margin-top:10px">&#9654; Fortsett lyttingen</button>
   <button class="lenkeknapp" id="knappFerdig">Ferdig &ndash; lagre og lukk</button>
 </div>
 
@@ -561,7 +562,7 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v4.3';
+const VERSJON = 'v4.4';
 
 // Nettleseren gir aldri en webapp filstien. Dette API-et gir i stedet et
 // håndtak som kan lagres og gjenbrukes mot et tillatelsestrykk – finnes i
@@ -600,23 +601,18 @@ function meldNativTilstand() {
 }
 
 // Knappetrykk fra bilen kommer hit via broen, og går inn i nøyaktig samme
-// tilstandsmaskin som skjermtrykk og web-mediekommandoer.
-window.proofearTrykk = function () {
-  logg('NATIV KOMMANDO: trykk', 'media');
-  // I bilen skal knappen alltid gjøre «det riktige»: står appen utenfor
-  // kjøremodus med et prosjekt klart, starter trykket kjøremodus selv.
-  if (visningNa !== 'lytting') {
-    if (prosjekt && lydErValgt()) {
-      logg('Trykk utenfor kjøremodus – starter kjøremodus automatisk', 'ok');
-      startKjoremodus();
-    } else {
-      logg('Trykk uten lydfil – melder fra til bilskjermen', 'feil');
-      try { window.ProofearNative.visMeldingIBil('Åpne Proofear på telefonen og velg lydfil først'); } catch (e) { /* ufarlig */ }
-      return;
-    }
-  }
-  nesteSteg(spiller.currentTime);
+// tilstandsmaskin - og samme knappeoppsett - som skjermtrykk og
+// web-mediekommandoer.
+//
+// Appen sendte til og med 1.6 bare «trykk» eller en spoleretning, og gikk
+// dermed UTENOM kartet: spor fram spolte alltid, uansett hvilket oppsett
+// brukeren hadde valgt. Fra app 1.7 følger kommandonavnet med hit.
+window.proofearKommando = function (navn) {
+  const k = String(navn || '').toLowerCase();
+  if (k) haandterKommando(k);
 };
+
+window.proofearTrykk = function () { haandterKommando('play'); };
 
 // Kalles av appen når siden er ferdig lastet – bekrefter at native kan nå
 // inn i siden, altså at broen virker begge veier.
@@ -635,11 +631,13 @@ window.proofearKlar = function () {
   logg('Broen svarer begge veier – native kan kalle inn i siden', 'ok');
 };
 
-// retning er 1 eller -1 – spolelengden bestemmes her, av innstillingene
+// Eldre app (til og med 1.6) sender bare en retning, uten kommandonavn.
+// Da finnes det ikke noe å slå opp i kartet, og vi spoler direkte som før -
+// web-utgaven publiseres alltid før APK-en når telefonen.
 window.proofearSpol = function (retning) {
   const n = Number(retning) || 0;
   if (!n) return;
-  logg('NATIV KOMMANDO: spol ' + (n > 0 ? 'fram' : 'tilbake'), 'media');
+  logg('NATIV KOMMANDO (app 1.6 eller eldre): spol ' + (n > 0 ? 'fram' : 'tilbake'), 'media');
   spol(n > 0 ? innst.spolLengde : -innst.spolLengde);
 };
 
@@ -829,9 +827,7 @@ const OPPSETT = {
       pause: { enkelt: 'trykk' },
       stop: { enkelt: 'trykk' },
       nexttrack: { enkelt: 'spolFram' },
-      previoustrack: { enkelt: 'spolTilbake' },
-      seekforward: { enkelt: 'spolFram' },
-      seekbackward: { enkelt: 'spolTilbake' }
+      previoustrack: { enkelt: 'spolTilbake' }
     }
   },
   framoverUtloser: {
@@ -844,9 +840,7 @@ const OPPSETT = {
       pause: { enkelt: 'trykk' },
       stop: { enkelt: 'trykk' },
       nexttrack: { enkelt: 'trykk' },
-      previoustrack: { enkelt: 'spolTilbake', dobbel: 'spolFram' },
-      seekforward: { enkelt: 'spolFram' },
-      seekbackward: { enkelt: 'spolTilbake' }
+      previoustrack: { enkelt: 'spolTilbake', dobbel: 'spolFram' }
     }
   },
   speilvariant: {
@@ -859,12 +853,23 @@ const OPPSETT = {
       pause: { enkelt: 'trykk' },
       stop: { enkelt: 'trykk' },
       nexttrack: { enkelt: 'trykk', dobbel: 'spolFram' },
-      previoustrack: { enkelt: 'spolTilbake' },
-      seekforward: { enkelt: 'spolFram' },
-      seekbackward: { enkelt: 'spolTilbake' }
+      previoustrack: { enkelt: 'spolTilbake' }
     }
   }
 };
+
+// Bilene er ikke enige om hvilken kommando en spoleknapp sender. Alle
+// varianter slås derfor opp under samme navn som spor fram/tilbake - sto
+// seek-kommandoene med egen, hardkodet oppføring (til og med v4.3), var
+// knappeoppsettet virkningsløst for en bil som sender dem i stedet.
+const KOMMANDOSYNONYM = {
+  seekforward: 'nexttrack', fastforward: 'nexttrack',
+  seekbackward: 'previoustrack', rewind: 'previoustrack'
+};
+
+function kanoniskKommando(kommando) {
+  return KOMMANDOSYNONYM[kommando] || kommando;
+}
 
 function gjeldendeKart() {
   return (OPPSETT[innst.knappeoppsett] || OPPSETT.standard).kart;
@@ -1268,7 +1273,8 @@ function haandterKommando(kommando) {
   logg('MEDIAKOMMANDO: ' + kommando + '  [' + tilstand +
     ', anker ' + (anker.paused ? 'av' : 'på') +
     ', melder ' + (navigator.mediaSession ? navigator.mediaSession.playbackState : '?') + ']', 'media');
-  const oppf = gjeldendeKart()[kommando];
+  const kanonisk = kanoniskKommando(kommando);
+  const oppf = gjeldendeKart()[kanonisk];
   if (!oppf) { logg('Kommandoen har ingen funksjon i dette oppsettet', 'info'); return; }
 
   // Enkel kommando uten dobbeltklikk – utfør med én gang
@@ -1277,7 +1283,7 @@ function haandterKommando(kommando) {
     return;
   }
 
-  if (ventendeKlikk && ventendeKlikk.kommando === kommando) {
+  if (ventendeKlikk && ventendeKlikk.kommando === kanonisk) {
     // Andre klikk innenfor vinduet
     clearTimeout(ventendeKlikk.timer);
     const intervall = Date.now() - ventendeKlikk.tid;
@@ -1291,7 +1297,7 @@ function haandterKommando(kommando) {
   // Første klikk: frys tidskoden nå, avgjør handling når vinduet løper ut
   const frossenTid = spiller.currentTime;
   ventendeKlikk = {
-    kommando: kommando,
+    kommando: kanonisk,
     tid: Date.now(),
     frossenTid: frossenTid,
     timer: setTimeout(() => {
@@ -1303,9 +1309,26 @@ function haandterKommando(kommando) {
 }
 
 function utfoer(handling, tidspunkt) {
-  if (handling === 'trykk') nesteSteg(tidspunkt);
+  if (handling === 'trykk') trykkMedAutostart(tidspunkt);
   else if (handling === 'spolFram') spol(innst.spolLengde);
   else if (handling === 'spolTilbake') spol(-innst.spolLengde);
+}
+
+// I bilen skal knappen alltid gjøre «det riktige»: står appen utenfor
+// lytteskjermen med et prosjekt klart, starter trykket lyttingen selv.
+function trykkMedAutostart(tidspunkt) {
+  if (visningNa !== 'lytting') {
+    if (prosjekt && lydErValgt()) {
+      logg('Trykk utenfor lytting – starter lyttingen automatisk', 'ok');
+      startKjoremodus();
+    } else {
+      logg('Trykk uten lydfil – melder fra til bilskjermen', 'feil');
+      try { window.ProofearNative.visMeldingIBil('Åpne Proofear på telefonen og velg lydfil først'); }
+      catch (e) { /* web-utgaven har ingen bilskjerm å melde til */ }
+      return;
+    }
+  }
+  nesteSteg(tidspunkt === undefined ? spiller.currentTime : tidspunkt);
 }
 
 function registrerMediaSession() {
@@ -2676,11 +2699,22 @@ function visOppsummering() {
     rad.append(tk, tekst);
     liste.append(rad);
   }
+  // Lyden er normalt fortsatt lastet rett etter en økt, men et gjenopprettet
+  // prosjekt uten fil skal ikke kunne fortsettes herfra.
+  $('knappFortsettOpps').disabled = !lydErValgt();
   visVisning('oppsummering');
 }
 
 $('knappFerdig').onclick = visHjem;
 $('oppsAlle').onclick = () => { if (prosjekt) visProsjektside(prosjekt); };
+
+// Angret man på å avslutte, skal veien tilbake til lyttingen være kort -
+// ikke om biblioteket og prosjektsiden. Lyden starter med én gang, slik
+// ▶ på fortsett-kortet også gjør.
+$('knappFortsettOpps').onclick = () => {
+  if (lydErValgt()) startKjoremodus(true);
+  else if (prosjekt) visProsjektside(prosjekt);
+};
 
 // -- Ark: notater under lyttingen, og deling --
 function lukkArk() {
