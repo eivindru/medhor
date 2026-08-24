@@ -146,6 +146,12 @@
     font-size: .8rem; color: var(--oktDemp); font-weight: 700; font-variant-numeric: tabular-nums; }
   #kjoreTopp input[type="range"] { flex: 1; height: 44px; accent-color: var(--oktGronn); margin: 0; background: transparent; border: none; padding: 0; }
   #kjoreTopp input[type="range"]:disabled { opacity: .35; }
+  /* Diskret, men mulig å sjekke hvilken fil som spilles - ellers finnes
+     det ingen vei til filnavnet når lyttingen først er i gang. */
+  #lyttFil { font-size: .78rem; font-weight: 600; color: var(--oktDemp);
+    text-align: center; padding: 0 18px 6px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; flex: none; }
+  #lyttFil:empty { display: none; }
   #trykkflate { flex: 1; display: flex; flex-direction: column; align-items: center;
     justify-content: center; text-align: center; margin: 0 16px; padding: 18px 16px;
     border-radius: 24px; background: var(--oktRo); transition: background .2s; user-select: none; min-height: 0; }
@@ -217,6 +223,9 @@
     border-radius: 16px; padding: 14px 16px; box-shadow: var(--skygge); margin-bottom: 12px;
     cursor: pointer; color: inherit; font-size: 1rem; }
   #pTittel { font-weight: 900; font-size: 1.45rem; line-height: 1.2; margin: 4px 0; overflow-wrap: anywhere; }
+  #pFil { color: var(--demp); font-size: .85rem; font-weight: 700; margin: 2px 0 1px;
+    overflow-wrap: anywhere; }
+  #pFil:empty { display: none; }
   #pMeta { color: var(--svak); font-size: .85rem; font-weight: 600; margin-bottom: 14px; }
   #etterSpiller { width: 100%; margin: 10px 0 4px; }
   .kommentar { background: var(--flate); border-radius: 14px; padding: 12px 14px;
@@ -381,6 +390,7 @@
     <input type="range" id="scrubber" min="0" max="0" step="0.1" value="0">
     <span id="scrubTotal">00:00</span>
   </div>
+  <div id="lyttFil"></div>
   <div id="trykkflate">
     <div id="stortStatus">KLAR</div>
     <div id="stortTid">00:00</div>
@@ -430,6 +440,7 @@
     <button class="iknapp fare" id="knappSlettProsjekt" aria-label="Slett">&#128465;</button>
   </div>
   <div id="pTittel">&ndash;</div>
+  <div id="pFil"></div>
   <div id="pMeta"></div>
   <button class="cta" id="knappFortsett">&#9654; Fortsett lyttingen</button>
   <button class="cta hul" id="knappDelProsjekt" style="margin-top:10px">Del notatene</button>
@@ -562,7 +573,7 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v4.4';
+const VERSJON = 'v4.6';
 
 // Nettleseren gir aldri en webapp filstien. Dette API-et gir i stedet et
 // håndtak som kan lagres og gjenbrukes mot et tillatelsestrykk – finnes i
@@ -666,7 +677,9 @@ window.proofearFilValgt = async function (adresse, navn, storrelse) {
     logg('Gjenåpnet prosjekt: ' + prosjekt.tittel, 'ok');
     hoppTilLagretPosisjon();
   } else {
-    await nyttProsjekt(navn, $('tittelFelt').value.trim() || utenEndelse(navn), {
+    // Nye lyttinger navngis alltid etter filen. Feltet kan inneholde et
+    // navn fra forrige prosjekt, og det skal ikke arves hit.
+    await nyttProsjekt(navn, utenEndelse(navn), {
       kilde: 'nativ', nativAdresse: adresse, filStorrelse: st
     });
   }
@@ -1748,9 +1761,17 @@ spiller.addEventListener('ended', () => {
   if (tilstand === 'SPILLER') settTilstand('LAGRET');
 });
 
+const LYDFEIL = {
+  1: 'avbrutt', 2: 'nettverksfeil', 3: 'dekodingsfeil',
+  4: 'kilden kunne ikke leses eller støttes ikke'
+};
+
 spiller.addEventListener('error', () => {
   const e = spiller.error;
-  logg('Lydfeil (kode ' + (e ? e.code : '?') + ')', 'feil');
+  const kode = e ? e.code : 0;
+  const detalj = (e && e.message) ? ' – ' + e.message : '';
+  logg('Lydfeil (kode ' + (kode || '?') + ': ' +
+    (LYDFEIL[kode] || 'ukjent') + ')' + detalj, 'feil');
 });
 
 /* ═══════════════ Talegjenkjenning ═══════════════ */
@@ -2169,7 +2190,7 @@ async function taIBrukFil(fil, handle) {
     logg('Gjenåpnet prosjekt: ' + prosjekt.tittel, 'ok');
     hoppTilLagretPosisjon();
   } else {
-    await nyttProsjekt(fil.name, $('tittelFelt').value.trim() || utenEndelse(fil.name), {
+    await nyttProsjekt(fil.name, utenEndelse(fil.name), {
       kilde: 'fil', filStorrelse: fil.size, filEndret: fil.lastModified || null
     });
   }
@@ -2271,7 +2292,7 @@ $('knappLastUrl').onclick = async () => {
     logg('Gjenåpnet prosjekt fra URL: ' + prosjekt.tittel, 'ok');
     hoppTilLagretPosisjon();
   } else {
-    await nyttProsjekt(navn, $('tittelFelt').value.trim() || utenEndelse(navn), { kilde: 'url', url: url });
+    await nyttProsjekt(navn, utenEndelse(navn), { kilde: 'url', url: url });
   }
   settMetadata();
   tegnProsjektListe();
@@ -2423,16 +2444,33 @@ async function beOmVarigLagring() {
 
 // Henter lyden for et prosjekt: lagret kopi, håndtak eller nettadresse.
 // Returnerer true hvis lyden er klar til avspilling.
+// Ber appen bygge en gyldig adresse for den lagrede filen. Feiler kallet
+// (eldre app uten metoden), brukes det som står lagret.
+function friskLydAdresse(lagret) {
+  try {
+    const ny = window.ProofearNative.lydAdresse(lagret);
+    if (ny) return ny;
+    logg('Lydtjeneren svarte ikke – bruker lagret adresse', 'info');
+  } catch (e) {
+    logg('Appen mangler lydAdresse() – bruker lagret adresse', 'info');
+  }
+  return lagret;
+}
+
 async function hentLydForProsjekt(p, viaBrukertrykk) {
   if (lydUrl && lydUrl.startsWith('blob:')) URL.revokeObjectURL(lydUrl);
   lydUrl = null;
   gjeldendeFil = null;
 
-  // 0. Nativ adresse: appen har varig tilgang, ingen kopi nødvendig
+  // 0. Nativ adresse: appen har varig tilgang, ingen kopi nødvendig.
+  // Adressen må gjenskapes hver gang: lydtjeneren i appen får ny port og ny
+  // nøkkel for hver oppstart, og prosjekter fra app 1.8 og eldre har en
+  // adresse fra den forrige løsningen, som ikke kunne spole.
   if (NATIV && p.nativAdresse) {
-    lydUrl = p.nativAdresse;
-    spiller.src = p.nativAdresse;
-    $('etterSpiller').src = p.nativAdresse;
+    const adresse = friskLydAdresse(p.nativAdresse);
+    lydUrl = adresse;
+    spiller.src = adresse;
+    $('etterSpiller').src = adresse;
     logg('Lyd hentet via varig filtilgang', 'ok');
     hoppTilLagretPosisjon();
     return true;
@@ -2579,6 +2617,7 @@ function startKjoremodus(autoSpill) {
   }
   visVisning('lytting');
   settTilstand('KLAR');
+  $('lyttFil').textContent = prosjekt ? (prosjekt.filnavn || '') : '';
   $('stortTid').textContent = formatTid(spiller.currentTime);
   logg('Lytting startet', 'ok');
   if (autoSpillVedStart) {
@@ -2641,6 +2680,8 @@ async function visProsjektside(p) {
     await hentLydForProsjekt(p, true);
   }
   $('pTittel').textContent = p.tittel;
+  // Tittelen kan være redigert, så filnavnet vises for seg
+  $('pFil').textContent = p.filnavn || '';
   const merke = (p.nativAdresse || p.harHandtak) ? '🔗 filen huskes'
     : p.lagretLyd ? '💾 lyd lagret i appen'
     : p.kilde === 'url' ? '🌐 hentes fra nett' : 'filen må velges på nytt';
