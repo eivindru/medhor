@@ -573,7 +573,7 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v4.6';
+const VERSJON = 'v4.7';
 
 // Nettleseren gir aldri en webapp filstien. Dette API-et gir i stedet et
 // håndtak som kan lagres og gjenbrukes mot et tillatelsestrykk – finnes i
@@ -791,7 +791,7 @@ const STANDARD = {
   csvFormat: 'HHMMSSFF',
   pip: true,
   backupModus: 'vedBehov',   // vedBehov | alltid | av
-  syklus: 'tredelt',         // tredelt | todelt (se avsluttKommentar)
+  syklus: 'todelt',          // todelt | tredelt (se avsluttKommentar)
   micPrimet: false,          // har brukeren sett mikrofon-forklaringen?
   utseende: 'auto',          // auto | lys | mork - gjelder KUN lytteskjermen
   sprak: 'nb-NO',
@@ -844,7 +844,7 @@ const OPPSETT = {
     }
   },
   framoverUtloser: {
-    navn: 'Framover utløser – dobbeltklikk bakover for å spole fram',
+    navn: 'Framover utløser – all spoling på bakoverknappen',
     forklaring: 'Spor fram utløser kommentar og reagerer umiddelbart. ' +
       'Spor tilbake spoler bakover ved enkeltklikk og framover ved dobbeltklikk. ' +
       'Ulempe: bakoverspoling forsinkes med dobbeltklikkvinduet og kan ikke hamres.',
@@ -857,7 +857,7 @@ const OPPSETT = {
     }
   },
   speilvariant: {
-    navn: 'Speilvariant – bakover kan hamres',
+    navn: 'Framover utløser – bakover kan hamres',
     forklaring: 'Spor tilbake spoler bakover umiddelbart og kan trykkes i rask rekkefølge. ' +
       'Spor fram utløser kommentar ved enkeltklikk og spoler framover ved dobbeltklikk. ' +
       'Tidskoden fryses ved første klikk, så kommentaren får riktig tid selv om pausen kommer litt etter.',
@@ -1560,8 +1560,15 @@ async function avsluttKommentar() {
   // ferdigstilt, skal etterslengeren fortsatt lagres på riktig sted
   ferdigstilling = { kommentarId: kommentarId, lydRef: lydRef, tidskodeSek: kommentarTid, timer: null };
   if (ventPaaGjenkjenner) {
-    // onend fullfører som regel før fristen – denne er bare et sikkerhetsnett
-    ferdigstilling.timer = setTimeout(fullfoerKommentar, 3000);
+    // onend fullfører som regel før fristen – denne er bare et sikkerhetsnett.
+    // Fristen er romslig med vilje: kommentaren er alt lagret og avspillingen
+    // i gang igjen, så ingen venter på den. Var den for kort, ble halen av
+    // lange kommentarer kastet.
+    ferdigstilling.timer = setTimeout(() => {
+      logg('Fristen løp ut etter ' + (FERDIG_FRIST / 1000) +
+        ' s – gjenkjenneren ble ikke ferdig', 'feil');
+      fullfoerKommentar();
+    }, FERDIG_FRIST);
   } else {
     fullfoerKommentar();
   }
@@ -1577,6 +1584,11 @@ async function avsluttKommentar() {
   visSlettKnapp();
 }
 
+// Hvor lenge vi venter på etterslengeren fra gjenkjenneren etter at
+// kommentaren er lagret. Var 3 s til og med v4.6, og da forsvant slutten
+// av lange kommentarer.
+const FERDIG_FRIST = 10000;
+
 // Lagrer en kommentar på gitt tidskode og returnerer id-en
 async function lagreKommentar(tekst, lydRef, tidskodeSek) {
   const kommentar = {
@@ -1590,7 +1602,7 @@ async function lagreKommentar(tekst, lydRef, tidskodeSek) {
   prosjekt.kommentarer.push(kommentar);
   prosjekt.kommentarer.sort((a, b) => a.tidskodeSek - b.tidskodeSek);
   await lagreProsjekt();
-  if (tilstand === 'LAGRET') {
+  if (tilstand !== 'LYTTER') {
     $('liveTekst').textContent = formatTid(tidskodeSek) + '  ' + kommentar.tekst;
   }
   logg('Lagret kommentar: «' + kommentar.tekst + '»', 'ok');
@@ -1617,7 +1629,9 @@ async function fullfoerKommentar() {
       k.tekst = tekst;
       k.transkribert = true;
       await lagreProsjekt();
-      if (tilstand === 'LAGRET') $('liveTekst').textContent = formatTid(k.tidskodeSek) + '  ' + tekst;
+      if (tilstand !== 'LYTTER') {
+        $('liveTekst').textContent = formatTid(k.tidskodeSek) + '  ' + tekst;
+      }
       logg('Kommentar ferdigstilt: «' + tekst + '»', 'ok');
     }
   } else if (tekst || f.lydRef) {
@@ -1626,7 +1640,7 @@ async function fullfoerKommentar() {
     visSlettKnapp();
   } else {
     logg('Tom kommentar forkastet', 'info');
-    if (tilstand === 'LAGRET') $('liveTekst').textContent = 'Tom – ingenting lagret';
+    if (tilstand !== 'LYTTER') $('liveTekst').textContent = 'Tom – ingenting lagret';
     visSlettKnapp();
   }
 }
@@ -1731,7 +1745,10 @@ spiller.addEventListener('timeupdate', () => {
   if (visningNa === 'lytting' && tilstand === 'SPILLER') {
     $('stortTid').textContent = formatTid(spiller.currentTime);
   }
-  if (prosjekt && Math.abs(spiller.currentTime - prosjekt.sistPosisjonSek) > 3) {
+  // Venter vi på å hoppe tilbake, står lyden fortsatt på 0 - da ville
+  // dette overskrevet stedet brukeren slapp på med et nullpunkt.
+  if (prosjekt && ventendePosisjon === null &&
+      Math.abs(spiller.currentTime - prosjekt.sistPosisjonSek) > 3) {
     prosjekt.sistPosisjonSek = spiller.currentTime;
     lagreProsjekt();
   }
@@ -2215,14 +2232,47 @@ async function taIBrukFil(fil, handle) {
   visKlargjor();
 }
 
+// Stedet vi skal tilbake til så snart lyden er klar. Null når vi ikke
+// venter på noe. Så lenge den er satt, skrives IKKE posisjonen til
+// databasen - ellers overskriver nullpunktet under lasting stedet
+// brukeren faktisk slapp på.
+let ventendePosisjon = null;
+
 function hoppTilLagretPosisjon() {
   if (!prosjekt || !(prosjekt.sistPosisjonSek > 0)) return;
-  const mål = prosjekt.sistPosisjonSek;
-  spiller.addEventListener('loadedmetadata', function hopp() {
-    spiller.currentTime = mål;
-    spiller.removeEventListener('loadedmetadata', hopp);
-    logg('Hoppet til lagret posisjon ' + formatTid(mål), 'info');
-  });
+  ventendePosisjon = prosjekt.sistPosisjonSek;
+  proevPosisjonshopp();
+}
+
+// Utfører hoppet hvis lyden er klar. Returnerer true når det er gjort
+// eller ikke trengs, false når vi fortsatt må vente på metadata.
+function proevPosisjonshopp() {
+  if (ventendePosisjon === null) return true;
+  if (spiller.readyState < 1) return false;   // metadata ikke lastet ennå
+  const mål = ventendePosisjon;
+  ventendePosisjon = null;
+  spiller.currentTime = mål;
+  logg('Hoppet til lagret posisjon ' + formatTid(mål), 'info');
+  return true;
+}
+
+spiller.addEventListener('loadedmetadata', proevPosisjonshopp);
+
+// Autospill skal aldri starte før hoppet er utført, ellers spiller den de
+// første sekundene fra 0 og hopper etterpå - eller blir stående på 0.
+function startNaarPosisjonKlar() {
+  if (proevPosisjonshopp()) { nesteSteg(spiller.currentTime); return; }
+  let ferdig = false;
+  const gaa = () => {
+    if (ferdig) return;
+    ferdig = true;
+    spiller.removeEventListener('loadedmetadata', gaa);
+    proevPosisjonshopp();
+    nesteSteg(spiller.currentTime);
+  };
+  // Vår egen lytter over kjører først, så hoppet er gjort når denne fyrer
+  spiller.addEventListener('loadedmetadata', gaa);
+  setTimeout(gaa, 5000);   // sikkerhetsnett hvis metadata aldri kommer
 }
 
 $('filVelger').addEventListener('change', async e => {
@@ -2615,14 +2665,27 @@ function startKjoremodus(autoSpill) {
   if (NATIV) {
     try { window.ProofearNative.startMedieokt(); } catch (e) { logg('Kunne ikke starte medieøkt: ' + e.message, 'feil'); }
   }
+  // Har lyden falt tilbake til start mens prosjektet husker et annet sted,
+  // gjenopprett det før vi spiller. Fanger tilfellene der lydkilden ble
+  // satt på nytt uten at hoppet gikk gjennom.
+  if (prosjekt && prosjekt.sistPosisjonSek > 3 && spiller.currentTime < 1 &&
+      ventendePosisjon === null) {
+    ventendePosisjon = prosjekt.sistPosisjonSek;
+    proevPosisjonshopp();
+  }
   visVisning('lytting');
   settTilstand('KLAR');
-  $('lyttFil').textContent = prosjekt ? (prosjekt.filnavn || '') : '';
+  // Prosjektnavnet, ikke filnavnet: tittelen er det brukeren kjenner igjen.
+  // Filnavnet står på prosjektsiden og Gjør klar-siden.
+  $('lyttFil').textContent = prosjekt ? (prosjekt.tittel || '') : '';
+  // Uten dette blir forrige økts notat stående i boblen - til og med når
+  // en helt annen fil er valgt.
+  $('liveTekst').textContent = '';
   $('stortTid').textContent = formatTid(spiller.currentTime);
   logg('Lytting startet', 'ok');
   if (autoSpillVedStart) {
     autoSpillVedStart = false;
-    nesteSteg(spiller.currentTime);
+    startNaarPosisjonKlar();
   }
 }
 
