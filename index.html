@@ -221,7 +221,9 @@
 
   .bibkort { width: 100%; text-align: left; background: var(--flate); border: none;
     border-radius: 16px; padding: 14px 16px; box-shadow: var(--skygge); margin-bottom: 12px;
-    cursor: pointer; color: inherit; font-size: 1rem; }
+    cursor: pointer; color: inherit; font-size: 1rem; overflow-wrap: anywhere; }
+  /* Pipevolum har ingen virkning mens lydsignalet er av - vis det */
+  .settrad.dempet { opacity: .45; }
   #pTittel { font-weight: 900; font-size: 1.45rem; line-height: 1.2; margin: 4px 0; overflow-wrap: anywhere; }
   #pFil { color: var(--demp); font-size: .85rem; font-weight: 700; margin: 2px 0 1px;
     overflow-wrap: anywhere; }
@@ -458,7 +460,7 @@
   </div>
   <div class="settrad"><span class="beskr">Lydsignal ved notat<small>pip n&aring;r lyttingen starter og stopper</small></span>
     <input type="checkbox" class="bryter" id="innPip"></div>
-  <div class="settrad"><span class="beskr">Pipevolum<small><span id="visPipVolum"></span> % &ndash; pr&oslash;ves n&aring;r du slipper</small></span>
+  <div class="settrad" id="radPipVolum"><span class="beskr">Pipevolum<small><span id="visPipVolum"></span> % &ndash; pr&oslash;ves n&aring;r du slipper</small></span>
     <input type="range" id="innPipVolum" min="0" max="100" step="5" style="width:44%"></div>
   <div class="settrad"><span class="beskr">Knappetrykkene<small>tre trykk gir pause etter lagring; to trykk fortsetter selv</small></span>
     <select id="innSyklus"><option value="tredelt">Tre trykk</option><option value="todelt">To trykk</option></select></div>
@@ -578,7 +580,7 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v4.9';
+const VERSJON = 'v4.10';
 
 // Nettleseren gir aldri en webapp filstien. Dette API-et gir i stedet et
 // håndtak som kan lagres og gjenbrukes mot et tillatelsestrykk – finnes i
@@ -3315,6 +3317,7 @@ function fyllInnstillinger() {
   $('innPip').checked = innst.pip;
   $('innPipVolum').value = Math.round(((typeof innst.pipVolum === 'number') ? innst.pipVolum : 0.4) * 100);
   $('visPipVolum').textContent = $('innPipVolum').value;
+  $('radPipVolum').classList.toggle('dempet', !innst.pip);
   $('innFerdigFrist').value = String(innst.ferdigFrist || 10);
   $('innSyklus').value = innst.syklus;
   $('innUtseende').value = innst.utseende || 'auto';
@@ -3356,7 +3359,11 @@ $('innHastighet').addEventListener('change', () => {
   lagreInnstillinger();
 });
 
-$('innPip').addEventListener('change', () => { innst.pip = $('innPip').checked; lagreInnstillinger(); });
+$('innPip').addEventListener('change', () => {
+  innst.pip = $('innPip').checked;
+  $('radPipVolum').classList.toggle('dempet', !innst.pip);
+  lagreInnstillinger();
+});
 
 $('innPipVolum').addEventListener('input', () => {
   innst.pipVolum = Number($('innPipVolum').value) / 100;
