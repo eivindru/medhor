@@ -446,6 +446,7 @@
   <button class="cta hul" id="knappDelProsjekt" style="margin-top:10px">Del notatene</button>
   <audio id="etterSpiller" controls preload="metadata"></audio>
   <div id="kommentarListe" style="margin-top:12px"></div>
+  <button class="lenkeknapp" id="knappArkiver">Legg i arkivet</button>
 </div>
 
 <!-- ========== INNSTILLINGER ========== -->
@@ -457,6 +458,8 @@
   </div>
   <div class="settrad"><span class="beskr">Lydsignal ved notat<small>pip n&aring;r lyttingen starter og stopper</small></span>
     <input type="checkbox" class="bryter" id="innPip"></div>
+  <div class="settrad"><span class="beskr">Pipevolum<small><span id="visPipVolum"></span> % &ndash; pr&oslash;ves n&aring;r du slipper</small></span>
+    <input type="range" id="innPipVolum" min="0" max="100" step="5" style="width:44%"></div>
   <div class="settrad"><span class="beskr">Knappetrykkene<small>tre trykk gir pause etter lagring; to trykk fortsetter selv</small></span>
     <select id="innSyklus"><option value="tredelt">Tre trykk</option><option value="todelt">To trykk</option></select></div>
   <div class="settrad"><span class="beskr">Spolelengde<small>hvor langt &laquo; og &raquo; hopper</small></span>
@@ -474,6 +477,8 @@
       <input type="range" id="innDobbelVindu" min="200" max="800" step="50" style="width:44%"></div>
     <div class="settrad"><span class="beskr">Lydopptak av notater<small>reserve n&aring;r dikteringen svikter</small></span>
       <select id="innBackupModus"><option value="vedBehov">Ved behov</option><option value="alltid">Alltid</option><option value="av">Av</option></select></div>
+    <div class="settrad"><span class="beskr">Frist for etterslenger<small>hvor lenge teksten kan dryppe inn etter lagring</small></span>
+      <select id="innFerdigFrist"><option value="3">3 sek</option><option value="5">5 sek</option><option value="10">10 sek</option><option value="15">15 sek</option><option value="20">20 sek</option></select></div>
     <div class="settrad"><span class="beskr">Utseende p&aring; lytteskjermen<small>resten av appen er alltid lys</small></span>
       <select id="innUtseende"><option value="auto">F&oslash;lg telefonen</option><option value="lys">Alltid lys</option><option value="mork">Alltid m&oslash;rk</option></select></div>
     <div class="settrad"><span class="beskr">Bilder per sekund<small>for HH:MM:SS:FF-tidskoder</small></span>
@@ -573,7 +578,7 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v4.8';
+const VERSJON = 'v4.9';
 
 // Nettleseren gir aldri en webapp filstien. Dette API-et gir i stedet et
 // håndtak som kan lagres og gjenbrukes mot et tillatelsestrykk – finnes i
@@ -790,6 +795,8 @@ const STANDARD = {
   fps: 25,
   csvFormat: 'HHMMSSFF',
   pip: true,
+  pipVolum: 0.4,          // 0-1; 0.4 var den hardkodede styrken til og med v4.8
+  ferdigFrist: 10,        // sekunder å vente på etterslengeren fra gjenkjenneren
   backupModus: 'vedBehov',   // vedBehov | alltid | av
   syklus: 'todelt',          // todelt | tredelt (se avsluttKommentar)
   micPrimet: false,          // har brukeren sett mikrofon-forklaringen?
@@ -1012,6 +1019,28 @@ async function nyttProsjekt(filnavn, tittel, ekstra) {
   logg('Nytt prosjekt: ' + prosjekt.tittel, 'ok');
 }
 
+function byggBibKort(p) {
+  const kort = document.createElement('button');
+  kort.className = 'bibkort';
+  const tit = document.createElement('div');
+  tit.style.fontWeight = '800';
+  tit.textContent = p.tittel;
+  const merker = [];
+  if (p.nativAdresse || p.harHandtak) merker.push('🔗 huskes');
+  else if (p.lagretLyd) merker.push('💾 lagret');
+  else if (p.kilde === 'url') merker.push('🌐 nettadresse');
+  const meta = document.createElement('div');
+  meta.className = 'sma';
+  meta.style.marginTop = '3px';
+  meta.textContent = p.kommentarer.length + ' notater · ' +
+    new Date(p.opprettet).toLocaleDateString('nb-NO') +
+    (p.filStorrelse ? ' · ' + formatBytes(p.filStorrelse) : '') +
+    (merker.length ? ' · ' + merker.join(' ') : '');
+  kort.append(tit, meta);
+  kort.onclick = () => visProsjektside(p);
+  return kort;
+}
+
 function tegnProsjektListe() {
   const el = $('prosjektListe');
   el.innerHTML = '';
@@ -1019,26 +1048,25 @@ function tegnProsjektListe() {
     el.innerHTML = '<div class="tom">Ingen lyttinger ennå. Velg en lydfil for å komme i gang.</div>';
     return;
   }
-  for (const p of prosjekter) {
-    const kort = document.createElement('button');
-    kort.className = 'bibkort';
-    const tit = document.createElement('div');
-    tit.style.fontWeight = '800';
-    tit.textContent = p.tittel;
-    const merker = [];
-    if (p.nativAdresse || p.harHandtak) merker.push('🔗 huskes');
-    else if (p.lagretLyd) merker.push('💾 lagret');
-    else if (p.kilde === 'url') merker.push('🌐 nettadresse');
-    const meta = document.createElement('div');
-    meta.className = 'sma';
-    meta.style.marginTop = '3px';
-    meta.textContent = p.kommentarer.length + ' notater · ' +
-      new Date(p.opprettet).toLocaleDateString('nb-NO') +
-      (p.filStorrelse ? ' · ' + formatBytes(p.filStorrelse) : '') +
-      (merker.length ? ' · ' + merker.join(' ') : '');
-    kort.append(tit, meta);
-    kort.onclick = () => visProsjektside(p);
-    el.append(kort);
+  const aktive = prosjekter.filter(p => !p.arkivert);
+  const arkiverte = prosjekter.filter(p => p.arkivert);
+
+  if (!aktive.length && arkiverte.length) {
+    el.innerHTML = '<div class="tom">Alle lyttingene ligger i arkivet.</div>';
+  }
+  for (const p of aktive) el.append(byggBibKort(p));
+
+  // Arkiverte lyttinger vises sammenslått nederst - de er lagt vekk,
+  // ikke borte, og hentes fram igjen fra prosjektsiden.
+  if (arkiverte.length) {
+    const boks = document.createElement('details');
+    boks.className = 'mervalg';
+    boks.style.marginTop = '14px';
+    const sum = document.createElement('summary');
+    sum.textContent = 'Arkiv (' + arkiverte.length + ')';
+    boks.append(sum);
+    for (const p of arkiverte) boks.append(byggBibKort(p));
+    el.append(boks);
   }
 }
 
@@ -1135,12 +1163,18 @@ function visAktivtProsjekt() {
   if (!antall) return;
 
   // Det åpne prosjektet først, deretter de sist brukte. prosjekter er
-  // allerede sortert på sistBrukt av lastProsjekter().
+  // allerede sortert på sistBrukt av lastProsjekter(). Arkiverte
+  // lyttinger hører ikke hjemme her - de er lagt vekk med vilje.
   const rekke = [];
-  if (prosjekt && prosjekter.indexOf(prosjekt) !== -1) rekke.push(prosjekt);
+  if (prosjekt && !prosjekt.arkivert && prosjekter.indexOf(prosjekt) !== -1) rekke.push(prosjekt);
   for (const p of prosjekter) {
     if (rekke.length >= FORSIDE_KORT) break;
-    if (rekke.indexOf(p) === -1) rekke.push(p);
+    if (!p.arkivert && rekke.indexOf(p) === -1) rekke.push(p);
+  }
+  if (!rekke.length) {
+    // Alt ligger i arkivet: ingen fortsett-kort, men biblioteket er der
+    $('fortsettTittel').style.display = 'none';
+    return;
   }
 
   el.append(byggStortKort(rekke[0]));
@@ -1240,7 +1274,8 @@ function vekkLyd() {
 }
 
 function pip(toner, lengde) {
-  if (!innst.pip) return;
+  const niv = (typeof innst.pipVolum === 'number') ? innst.pipVolum : 0.4;
+  if (!innst.pip || niv <= 0) return;
   try {
     vekkLyd();
     const varighet = lengde || 0.11;
@@ -1251,8 +1286,8 @@ function pip(toner, lengde) {
       osc.frequency.value = frekvens;
       osc.type = 'sine';
       gain.gain.setValueAtTime(0, start);
-      gain.gain.linearRampToValueAtTime(0.4, start + 0.01);
-      gain.gain.setValueAtTime(0.4, start + varighet - 0.03);
+      gain.gain.linearRampToValueAtTime(niv, start + 0.01);
+      gain.gain.setValueAtTime(niv, start + varighet - 0.03);
       gain.gain.linearRampToValueAtTime(0, start + varighet - 0.005);
       osc.connect(gain).connect(lydCtx.destination);
       osc.start(start);
@@ -1605,10 +1640,10 @@ async function avsluttKommentar() {
     // i gang igjen, så ingen venter på den. Var den for kort, ble halen av
     // lange kommentarer kastet.
     ferdigstilling.timer = setTimeout(() => {
-      logg('Fristen løp ut etter ' + (FERDIG_FRIST / 1000) +
+      logg('Fristen løp ut etter ' + ferdigFristMs() / 1000 +
         ' s – gjenkjenneren ble ikke ferdig', 'feil');
       fullfoerKommentar();
-    }, FERDIG_FRIST);
+    }, ferdigFristMs());
   } else {
     fullfoerKommentar();
   }
@@ -1625,9 +1660,12 @@ async function avsluttKommentar() {
 }
 
 // Hvor lenge vi venter på etterslengeren fra gjenkjenneren etter at
-// kommentaren er lagret. Var 3 s til og med v4.6, og da forsvant slutten
-// av lange kommentarer.
-const FERDIG_FRIST = 10000;
+// kommentaren er lagret. Var hardkodet 3 s til og med v4.6, og da forsvant
+// slutten av lange kommentarer. Fra v4.9 valgbar i Innstillinger → Avansert.
+function ferdigFristMs() {
+  const sek = Number(innst.ferdigFrist);
+  return (isFinite(sek) && sek > 0 ? sek : 10) * 1000;
+}
 
 // Lagrer en kommentar på gitt tidskode og returnerer id-en
 async function lagreKommentar(tekst, lydRef, tidskodeSek) {
@@ -2790,11 +2828,26 @@ async function visProsjektside(p) {
     : p.lagretLyd ? '💾 lyd lagret i appen'
     : p.kilde === 'url' ? '🌐 hentes fra nett' : 'filen må velges på nytt';
   $('pMeta').textContent = p.kommentarer.length + ' notater · ' +
-    formatTid(p.sistPosisjonSek || 0) + ' hørt · ' + merke;
+    formatTid(p.sistPosisjonSek || 0) + ' hørt · ' + merke +
+    (p.arkivert ? ' · 📦 i arkivet' : '');
+  $('knappArkiver').textContent = p.arkivert ? 'Hent fram fra arkivet' : 'Legg i arkivet';
   $('knappFortsett').disabled = !lydErValgt();
   tegnKommentarer();
   visVisning('prosjektside');
 }
+
+// Arkivering er ren synlighet: lyttingen forsvinner fra forsiden og
+// hovedlista i biblioteket, men alt annet - notater, lyd, eksport - er
+// urørt. Reversibelt, derfor ingen bekreftelse. Holdes bevisst adskilt
+// fra «Fjern lyd», som frigjør plass.
+$('knappArkiver').onclick = async () => {
+  const p = prosjekt;
+  if (!p) return;
+  p.arkivert = !p.arkivert;
+  await lagreProsjekt();
+  logg((p.arkivert ? 'Arkiverte' : 'Hentet fram') + ' lytting: ' + p.tittel, 'info');
+  visProsjektside(p);
+};
 
 $('knappFortsett').onclick = () => { if (lydErValgt()) startKjoremodus(); };
 
@@ -3260,6 +3313,9 @@ function fyllInnstillinger() {
   $('innSpolLengde').value = innst.spolLengde;
   $('innHastighet').value = innst.hastighet;
   $('innPip').checked = innst.pip;
+  $('innPipVolum').value = Math.round(((typeof innst.pipVolum === 'number') ? innst.pipVolum : 0.4) * 100);
+  $('visPipVolum').textContent = $('innPipVolum').value;
+  $('innFerdigFrist').value = String(innst.ferdigFrist || 10);
   $('innSyklus').value = innst.syklus;
   $('innUtseende').value = innst.utseende || 'auto';
   $('innBackupModus').value = innst.backupModus;
@@ -3301,6 +3357,21 @@ $('innHastighet').addEventListener('change', () => {
 });
 
 $('innPip').addEventListener('change', () => { innst.pip = $('innPip').checked; lagreInnstillinger(); });
+
+$('innPipVolum').addEventListener('input', () => {
+  innst.pipVolum = Number($('innPipVolum').value) / 100;
+  $('visPipVolum').textContent = $('innPipVolum').value;
+  lagreInnstillinger();
+});
+// Prøvepip når skyveknappen slippes, så nivået kan velges med ørene.
+// På 0 er pipene i praksis av - da er stillheten selv svaret.
+$('innPipVolum').addEventListener('change', () => { pip(PIP.lytter); });
+
+$('innFerdigFrist').addEventListener('change', () => {
+  innst.ferdigFrist = Number($('innFerdigFrist').value);
+  lagreInnstillinger();
+  logg('Frist for etterslenger: ' + innst.ferdigFrist + ' s', 'ok');
+});
 $('innSyklus').addEventListener('change', () => {
   innst.syklus = $('innSyklus').value;
   lagreInnstillinger();
