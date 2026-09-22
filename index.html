@@ -580,7 +580,7 @@
 
 // Bump ved hver endring – vises på skjermen så det er lett å se om telefonen
 // har lastet siste versjon.
-const VERSJON = 'v4.10';
+const VERSJON = 'v4.11';
 
 // Nettleseren gir aldri en webapp filstien. Dette API-et gir i stedet et
 // håndtak som kan lagres og gjenbrukes mot et tillatelsestrykk – finnes i
@@ -2742,6 +2742,14 @@ function startKjoremodus(autoSpill) {
   if (prosjekt) { prosjekt.sistBrukt = Date.now(); lagreProsjekt(); }
   vekkLyd();
   spiller.playbackRate = innst.hastighet;
+  // Navnet til bilskjermen, låseskjermen og varselet settes HER, og det må
+  // skje før forgrunnstjenesten starter: varselet bygges med tittelen som
+  // ligger i MedieKobling i det øyeblikket. Veiene hit fra et forsidekort og
+  // fra biblioteket bytter prosjekt uten å røre metadataen, så uten dette
+  // viste bilen forrige lyttings navn mens den nye spilte – og hver
+  // tilstandsmelding skrev det gamle navnet inn i sesjonen på nytt.
+  // Fantes fra A5, da kortene og prosjektsiden fikk egne startveier.
+  settMetadata();
   // I appen tar forgrunnstjenesten over som knappemottaker
   if (NATIV) {
     try { window.ProofearNative.startMedieokt(); } catch (e) { logg('Kunne ikke starte medieøkt: ' + e.message, 'feil'); }
@@ -2823,6 +2831,9 @@ async function visProsjektside(p) {
     prosjekt = p;
     await hentLydForProsjekt(p, true);
   }
+  // Ubetinget: låseskjermen skal aldri vise en annen lytting enn den som er
+  // framme. Kallet er billig og tåler å gjentas.
+  settMetadata();
   $('pTittel').textContent = p.tittel;
   // Tittelen kan være redigert, så filnavnet vises for seg
   $('pFil').textContent = p.filnavn || '';
@@ -2867,6 +2878,8 @@ $('knappSlettProsjekt').onclick = async () => {
   }
   await dbSlett('prosjekter', p.id);
   prosjekt = null;
+  // Ellers står den slettede lyttingens navn igjen på låseskjermen
+  settMetadata();
   await lastProsjekter();
   logg('Slettet lytting: ' + p.tittel, 'info');
   visHjem();
